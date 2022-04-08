@@ -2,8 +2,6 @@ use actix::Recipient;
 use actix_derive::Message;
 use uuid::Uuid;
 
-mod messages;
-    
 //WsConn responds to this to pipe it through to the actual client
 #[derive(Message)]
 #[rtype(result = "()")]

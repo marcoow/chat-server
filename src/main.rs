@@ -1,17 +1,22 @@
 // see https://levelup.gitconnected.com/websockets-in-actix-web-full-tutorial-websockets-actors-f7f9484f5086
 use actix::{fut, ActorContext};
+use actix::prelude::{Context};
 use actix::{Actor, Addr, Running, StreamHandler, WrapFuture, ActorFuture, ContextFutureSpawner};
-use actix_web::{middleware::Logger, web, App, Error, HttpRequest, HttpResponse, HttpServer};
+use actix_web::{middleware::Logger, web, App, Error, HttpRequest, HttpResponse, HttpServer, get};
 use actix_web_actors::ws;
+use actix_web_actors::ws::Message::Text;
+use actix::{AsyncContext, Handler};
 use std::time::{Duration, Instant};
 use uuid::Uuid;
+
+mod messages;
 use messages::{WsMessage, Connect, Disconnect, ClientActorMessage};
+
+mod room;
+use room::Room;
 
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
 const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
-
-/// Define HTTP actor
-struct MyWs;
 
 struct Connection {
     room: Uuid,
@@ -109,23 +114,31 @@ impl Handler<WsMessage> for Connection {
     }
 }
 
-async fn index(req: HttpRequest, stream: web::Payload) -> Result<HttpResponse, Error> {
-    let resp = ws::start(MyWs {}, &req, stream);
-    println!("{:?}", resp);
-    resp
+
+#[get("/")]
+pub async fn start_connection(
+    req: HttpRequest,
+    stream: web::Payload,
+    srv: web::Data<Addr<Room>>,
+) -> Result<HttpResponse, Error> {
+    let ws = Connection::new(
+        Uuid::new_v4(),
+    );
+
+    let resp = ws::start(ws, &req, stream)?;
+    Ok(resp)
 }
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    let env = env_logger::Env::new().default_filter_or("info");
-    env_logger::init_from_env(env);
+    let chat_server = Room::default().start(); //create and spin up a lobby
 
-    HttpServer::new(|| {
+    HttpServer::new(move || {
         App::new()
-            .wrap(Logger::default())
-            .route("/ws/", web::get().to(index))
+            .service(start_connection) //. rename with "as" import or naming conflict
+            .data(chat_server.clone()) //register the lobby
     })
-    .bind(("127.0.0.1", 4000))?
+    .bind("127.0.0.1:4000")?
     .run()
     .await
 }
