@@ -25,10 +25,10 @@ pub struct Disconnect {
 }
 
 //client sends this to the lobby for the lobby to echo out.
-#[derive(Message)]
-#[rtype(result = "()")]
-pub struct ClientActorMessage {
-    pub id: Uuid,
-    pub msg: String,
-    pub room_id: Uuid
-}
+// #[derive(Message)]
+// #[rtype(result = "()")]
+// pub struct ClientActorMessage {
+//     pub id: Uuid,
+//     pub msg: String,
+//     pub room_id: Uuid
+// }

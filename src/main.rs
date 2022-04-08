@@ -1,34 +1,36 @@
 // see https://levelup.gitconnected.com/websockets-in-actix-web-full-tutorial-websockets-actors-f7f9484f5086
 use actix::{fut, ActorContext};
-use actix::prelude::{Context};
-use actix::{Actor, Addr, Running, StreamHandler, WrapFuture, ActorFuture, ContextFutureSpawner};
-use actix_web::{middleware::Logger, web, App, Error, HttpRequest, HttpResponse, HttpServer, get};
+use actix::{Actor, Addr, ContextFutureSpawner, Running, StreamHandler, WrapFuture};
+use actix::{AsyncContext, Handler};
+use actix_web::{get, middleware::Logger, web, App, Error, HttpRequest, HttpResponse, HttpServer};
 use actix_web_actors::ws;
 use actix_web_actors::ws::Message::Text;
-use actix::{AsyncContext, Handler};
+use std::collections::HashMap;
 use std::time::{Duration, Instant};
 use uuid::Uuid;
 
 mod messages;
-use messages::{WsMessage, Connect, Disconnect, ClientActorMessage};
+use messages::{Connect, Disconnect, WsMessage};
 
-mod room;
-use room::Room;
+mod lobby;
+use lobby::Lobby;
 
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
 const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
 
 struct Connection {
-    room: Uuid,
+    room: String,
+    lobby_addr: Addr<Lobby>,
     hb: Instant,
     id: Uuid,
 }
 
 impl Connection {
-    pub fn new(room: Uuid) -> Connection {
+    pub fn new(room: String, lobby_addr: Addr<Lobby>) -> Connection {
         Connection {
             id: Uuid::new_v4(),
             room,
+            lobby_addr,
             hb: Instant::now(),
         }
     }
@@ -37,14 +39,18 @@ impl Connection {
         ctx.run_interval(HEARTBEAT_INTERVAL, |act, ctx| {
             if Instant::now().duration_since(act.hb) > CLIENT_TIMEOUT {
                 println!("Disconnecting failed heartbeat");
-                act.lobby_addr.do_send(Disconnect { id: act.id, room_id: act.room });
+                //act.lobby_addr.do_send(Disconnect { id: act.id, room_id: act.room });
                 ctx.stop();
                 return;
             }
-    
+
             ctx.ping(b"PING");
         });
     }
+}
+
+struct AppState {
+    lobby_addrs: Addr<Lobby>,
 }
 
 impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for Connection {
@@ -66,11 +72,12 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for Connection {
                 ctx.stop();
             }
             Ok(ws::Message::Nop) => (),
-            Ok(Text(s)) => self.lobby_addr.do_send(ClientActorMessage {
-                id: self.id,
-                msg: s,
-                room_id: self.room
-            }),
+            Ok(Text(s)) => (),
+            // Ok(Text(s)) => self.lobby_addr.do_send(ClientActorMessage {
+            //     id: self.id,
+            //     msg: s,
+            //     room_id: self.room
+            // }),
             Err(e) => panic!("{}", e),
         }
     }
@@ -81,27 +88,27 @@ impl Actor for Connection {
 
     fn started(&mut self, ctx: &mut Self::Context) {
         self.hb(ctx);
-    
+
         let addr = ctx.address();
-        self.lobby_addr
-            .send(Connect {
-                addr: addr.recipient(),
-                lobby_id: self.room,
-                self_id: self.id,
-            })
-            .into_actor(self)
-            .then(|res, _, ctx| {
-                match res {
-                    Ok(_res) => (),
-                    _ => ctx.stop(),
-                }
-                fut::ready(())
-            })
-            .wait(ctx);
+        // self.lobby_addr
+        //     .send(Connect {
+        //         addr: addr.recipient(),
+        //         lobby_id: self.room,
+        //         self_id: self.id,
+        //     })
+        //     .into_actor(self)
+        //     .then(|res, _, ctx| {
+        //         match res {
+        //             Ok(_res) => (),
+        //             _ => ctx.stop(),
+        //         }
+        //         fut::ready(())
+        //     })
+        //     .wait(ctx);
     }
-    
+
     fn stopping(&mut self, _: &mut Self::Context) -> Running {
-        self.lobby_addr.do_send(Disconnect { id: self.id, room_id: self.room });
+        //self.lobby_addr.do_send(Disconnect { id: self.id, room_id: self.room });
         Running::Stop
     }
 }
@@ -114,16 +121,16 @@ impl Handler<WsMessage> for Connection {
     }
 }
 
-
-#[get("/")]
+#[get("/{room_id}")]
 pub async fn start_connection(
     req: HttpRequest,
     stream: web::Payload,
-    srv: web::Data<Addr<Room>>,
+    path: web::Path<(String,)>,
+    srv: web::Data<Addr<Lobby>>,
 ) -> Result<HttpResponse, Error> {
-    let ws = Connection::new(
-        Uuid::new_v4(),
-    );
+    let room_id = path.into_inner().0;
+    println!("{}", room_id);
+    let ws = Connection::new(room_id, srv.get_ref().clone());
 
     let resp = ws::start(ws, &req, stream)?;
     Ok(resp)
@@ -131,12 +138,10 @@ pub async fn start_connection(
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    let chat_server = Room::default().start(); //create and spin up a lobby
+    let lobby = Lobby::default().start();
 
     HttpServer::new(move || {
-        App::new()
-            .service(start_connection) //. rename with "as" import or naming conflict
-            .data(chat_server.clone()) //register the lobby
+        App::new().data(lobby.clone()).service(start_connection) //. rename with "as" import or naming conflict
     })
     .bind("127.0.0.1:4000")?
     .run()
