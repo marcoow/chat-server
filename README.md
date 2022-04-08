@@ -22,13 +22,3 @@ Added features:
 2. [http://localhost:8080/count/](http://localhost:8080/count/) is a non-websocket endpoint and will affect and display state.
 
 To start server use command: `cargo run --bin websocket-chat-server`
-
-## Client
-
-Client connects to server. Reads input from stdin and sends to server.
-
-To run client use command: `cargo run --bin websocket-chat-client`
-
-## WebSocket Browser Client
-
-Open url: [http://localhost:8080/](http://localhost:8080/)

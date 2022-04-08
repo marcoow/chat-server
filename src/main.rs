@@ -7,7 +7,6 @@ use std::{
 };
 
 use actix::*;
-use actix_files::{Files, NamedFile};
 use actix_web::{
     middleware::Logger, web, App, Error, HttpRequest, HttpResponse, HttpServer, Responder,
 };
@@ -15,10 +14,6 @@ use actix_web_actors::ws;
 
 mod server;
 mod session;
-
-async fn index() -> impl Responder {
-    NamedFile::open_async("./static/index.html").await.unwrap()
-}
 
 /// Entry point for our websocket route
 async fn chat_route(
@@ -62,10 +57,8 @@ async fn main() -> std::io::Result<()> {
         App::new()
             .app_data(web::Data::from(app_state.clone()))
             .app_data(web::Data::new(server.clone()))
-            .service(web::resource("/").to(index))
             .route("/count", web::get().to(get_count))
             .route("/ws", web::get().to(chat_route))
-            .service(Files::new("/static", "./static"))
             .wrap(Logger::default())
     })
     .workers(2)
