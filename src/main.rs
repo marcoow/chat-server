@@ -19,17 +19,17 @@ const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
 const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
 
 struct Connection {
-    room: String,
+    lobby: String,
     lobby_addr: Addr<Lobby>,
     hb: Instant,
     id: Uuid,
 }
 
 impl Connection {
-    pub fn new(room: String, lobby_addr: Addr<Lobby>) -> Connection {
+    pub fn new(lobby: String, lobby_addr: Addr<Lobby>) -> Connection {
         Connection {
             id: Uuid::new_v4(),
-            room,
+            lobby,
             lobby_addr,
             hb: Instant::now(),
         }
@@ -39,7 +39,7 @@ impl Connection {
         ctx.run_interval(HEARTBEAT_INTERVAL, |act, ctx| {
             if Instant::now().duration_since(act.hb) > CLIENT_TIMEOUT {
                 println!("Disconnecting failed heartbeat");
-                //act.lobby_addr.do_send(Disconnect { id: act.id, room_id: act.room });
+                //act.lobby_addr.do_send(Disconnect { id: act.id, lobby_id: act.lobby });
                 ctx.stop();
                 return;
             }
@@ -76,7 +76,7 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for Connection {
             // Ok(Text(s)) => self.lobby_addr.do_send(ClientActorMessage {
             //     id: self.id,
             //     msg: s,
-            //     room_id: self.room
+            //     lobby_id: self.lobby
             // }),
             Err(e) => panic!("{}", e),
         }
@@ -93,7 +93,7 @@ impl Actor for Connection {
         // self.lobby_addr
         //     .send(Connect {
         //         addr: addr.recipient(),
-        //         lobby_id: self.room,
+        //         lobby_id: self.lobby,
         //         self_id: self.id,
         //     })
         //     .into_actor(self)
@@ -108,7 +108,7 @@ impl Actor for Connection {
     }
 
     fn stopping(&mut self, _: &mut Self::Context) -> Running {
-        //self.lobby_addr.do_send(Disconnect { id: self.id, room_id: self.room });
+        //self.lobby_addr.do_send(Disconnect { id: self.id, lobby_id: self.lobby });
         Running::Stop
     }
 }
@@ -121,16 +121,16 @@ impl Handler<WsMessage> for Connection {
     }
 }
 
-#[get("/{room_id}")]
+#[get("/{lobby_id}")]
 pub async fn start_connection(
     req: HttpRequest,
     stream: web::Payload,
     path: web::Path<(String,)>,
     srv: web::Data<Addr<Lobby>>,
 ) -> Result<HttpResponse, Error> {
-    let room_id = path.into_inner().0;
-    println!("{}", room_id);
-    let ws = Connection::new(room_id, srv.get_ref().clone());
+    let lobby_id = path.into_inner().0;
+    println!("{}", lobby_id);
+    let ws = Connection::new(lobby_id, srv.get_ref().clone());
 
     let resp = ws::start(ws, &req, stream)?;
     Ok(resp)

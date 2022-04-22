@@ -6,14 +6,14 @@ use uuid::Uuid;
 
 pub struct Lobby {
     //sessions: HashMap<Uuid, Socket>, //self id to self
-    rooms: HashMap<Uuid, HashSet<Uuid>>, //room id  to list of users id
+    lobbys: HashMap<Uuid, HashSet<Uuid>>, //lobby id  to list of users id
 }
 
 impl Default for Lobby {
     fn default() -> Lobby {
         Lobby {
             //sessions: HashMap::new(),
-            rooms: HashMap::new(),
+            lobbys: HashMap::new(),
         }
     }
 }
