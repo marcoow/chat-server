@@ -9,13 +9,14 @@ use actix_web_actors::ws;
 use actix_web_actors::ws::Message::Text;
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
+use serde_json;
 use uuid::Uuid;
 
 mod messages;
-use messages::{Connect, Disconnect, WsMessage};
+use messages::{Connect, Disconnect, WsMessage, UserMessage};
 
 mod lobby;
-use lobby::Lobby;
+use lobby::{Lobby, Event};
 
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
 const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
@@ -72,12 +73,13 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for Connection {
                 ctx.stop();
             }
             Ok(ws::Message::Nop) => (),
-            Ok(Text(s)) => (),
-            // Ok(Text(s)) => self.lobby_addr.do_send(ClientActorMessage {
-            //     id: self.id,
-            //     msg: s,
-            //     lobby_id: self.lobby
-            // }),
+            Ok(Text(s)) => {
+                let deserialized: Result<Event, serde_json::Error> = serde_json::from_str(&s);
+                match deserialized {
+                    Ok(event) => self.lobby_addr.do_send(UserMessage { id: self.id, event }),
+                    Err(error) => println!("unknown message: {:?}", s),
+                };
+            },
             Err(e) => panic!("{}", e),
         }
     }

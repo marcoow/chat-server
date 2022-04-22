@@ -1,18 +1,22 @@
-use crate::messages::{Connect, Disconnect, WsMessage};
+use crate::messages::{Connect, Disconnect, WsMessage, UserMessage};
 use actix::prelude::{Actor, Context, Handler, Recipient};
-use serde::Serialize;
+use serde::{Serialize, Deserialize};
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
 type Socket = Recipient<WsMessage>;
 
-#[derive(Serialize)]
+#[derive(Debug)]
+#[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-enum Event {
+pub enum Event {
     SelfJoined(Uuid),
     UserPresent(Uuid),
     UserJoined(Uuid),
     UserLeft(Uuid),
+    ICECandidate(Uuid, String),
+    RTCConnectionOffer(Uuid, String),
+    RTCConnectionAnswer(Uuid, String),
 }
 
 pub struct Lobby {
@@ -87,5 +91,13 @@ impl Handler<Disconnect> for Lobby {
             let json = serde_json::to_string_pretty(&event).unwrap();
             self.send_message(&json, conn_id);
         });
+    }
+}
+
+impl Handler<UserMessage> for Lobby {
+    type Result = ();
+
+    fn handle(&mut self, msg: UserMessage, _: &mut Context<Self>) -> Self::Result {
+        println!("{:?}", msg.event);
     }
 }
