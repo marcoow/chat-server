@@ -1,6 +1,6 @@
 // see https://levelup.gitconnected.com/websockets-in-actix-web-full-tutorial-websockets-actors-f7f9484f5086
 use actix::{fut, ActorContext};
-use actix::{Actor, Addr, ContextFutureSpawner, Running, StreamHandler, WrapFuture};
+use actix::{Actor, Addr, ContextFutureSpawner, Running, StreamHandler, WrapFuture, ActorFutureExt};
 use actix::{AsyncContext, Handler};
 use actix_web::{get, middleware::Logger, web, App, Error, HttpRequest, HttpResponse, HttpServer};
 use actix_web_actors::ws;
@@ -19,17 +19,15 @@ const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
 const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
 
 struct Connection {
-    lobby: String,
     lobby_addr: Addr<Lobby>,
     hb: Instant,
     id: Uuid,
 }
 
 impl Connection {
-    pub fn new(lobby: String, lobby_addr: Addr<Lobby>) -> Connection {
+    pub fn new(lobby_addr: Addr<Lobby>) -> Connection {
         Connection {
             id: Uuid::new_v4(),
-            lobby,
             lobby_addr,
             hb: Instant::now(),
         }
@@ -90,21 +88,20 @@ impl Actor for Connection {
         self.hb(ctx);
 
         let addr = ctx.address();
-        // self.lobby_addr
-        //     .send(Connect {
-        //         addr: addr.recipient(),
-        //         lobby_id: self.lobby,
-        //         self_id: self.id,
-        //     })
-        //     .into_actor(self)
-        //     .then(|res, _, ctx| {
-        //         match res {
-        //             Ok(_res) => (),
-        //             _ => ctx.stop(),
-        //         }
-        //         fut::ready(())
-        //     })
-        //     .wait(ctx);
+        self.lobby_addr
+            .send(Connect {
+                addr: addr.recipient(),
+                self_id: self.id,
+            })
+            .into_actor(self)
+            .then(|res, _, ctx| {
+                match res {
+                    Ok(_res) => (),
+                    _ => ctx.stop(),
+                }
+                fut::ready(())
+            })
+            .wait(ctx);
     }
 
     fn stopping(&mut self, _: &mut Self::Context) -> Running {
@@ -129,8 +126,7 @@ pub async fn start_connection(
     srv: web::Data<Addr<Lobby>>,
 ) -> Result<HttpResponse, Error> {
     let lobby_id = path.into_inner().0;
-    println!("{}", lobby_id);
-    let ws = Connection::new(lobby_id, srv.get_ref().clone());
+    let ws = Connection::new(srv.get_ref().clone());
 
     let resp = ws::start(ws, &req, stream)?;
     Ok(resp)
@@ -140,9 +136,14 @@ pub async fn start_connection(
 async fn main() -> std::io::Result<()> {
     let lobby = Lobby::default().start();
 
+    env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
+
     let bind_to = "127.0.0.1:4000";
     let server = HttpServer::new(move || {
-        App::new().data(lobby.clone()).service(start_connection) //. rename with "as" import or naming conflict
+        App::new()
+            .wrap(Logger::default())
+            .data(lobby.clone())
+            .service(start_connection)
     })
     .bind(bind_to)?
     .run();
