@@ -1,8 +1,19 @@
 use crate::messages::{Connect, Disconnect, WsMessage};
 use actix::prelude::{Actor, Context, Handler, Recipient};
+use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
+
 type Socket = Recipient<WsMessage>;
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+enum Event {
+    SelfJoined(Uuid),
+    UserPresent(Uuid),
+    UserJoined(Uuid),
+    UserLeft(Uuid),
+}
 
 pub struct Lobby {
     sessions: HashMap<Uuid, Socket>, //self id to self
@@ -41,16 +52,25 @@ impl Handler<Connect> for Lobby {
         self.sessions
             .keys()
             .filter(|conn_id| *conn_id.to_owned() != msg.self_id)
-            .for_each(|conn_id| self.send_message(&format!("joined: {}", msg.self_id), conn_id));
+            .for_each(|conn_id| {
+                let event = Event::UserJoined(msg.self_id);
+                let json = serde_json::to_string_pretty(&event).unwrap();
+                self.send_message(&json, conn_id)
+            });
 
         // send me all the uuids of everyone who is already there
         self.sessions
             .keys()
             .filter(|conn_id| *conn_id.to_owned() != msg.self_id)
-            .for_each(|conn_id| self.send_message(&format!("present: {}", conn_id), &msg.self_id));
+            .for_each(|conn_id| {
+                let event = Event::UserPresent(*conn_id);
+                let json = serde_json::to_string_pretty(&event).unwrap();
+                self.send_message(&json, &msg.self_id)
+            });
 
-        // send self your new uuid
-        self.send_message(&format!("your id is {}", msg.self_id), &msg.self_id);
+        let event = Event::SelfJoined(msg.self_id);
+        let json = serde_json::to_string_pretty(&event).unwrap();
+        self.send_message(&json, &msg.self_id);
     }
 }
 
@@ -62,8 +82,10 @@ impl Handler<Disconnect> for Lobby {
         self.sessions.remove(&msg.id);
 
         // send to everyone in the room that new uuid just left
-        self.sessions
-            .keys()
-            .for_each(|conn_id| self.send_message(&format!("left: {}", msg.id), conn_id));
+        self.sessions.keys().for_each(|conn_id| {
+            let event = Event::UserLeft(msg.id);
+            let json = serde_json::to_string_pretty(&event).unwrap();
+            self.send_message(&json, conn_id);
+        });
     }
 }
