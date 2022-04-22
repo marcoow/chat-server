@@ -1,7 +1,7 @@
+use crate::lobby::Event;
 use actix::Recipient;
 use actix_derive::Message;
 use uuid::Uuid;
-use crate::lobby::Event;
 
 //WsConn responds to this to pipe it through to the actual client
 #[derive(Message)]
@@ -26,6 +26,6 @@ pub struct Disconnect {
 #[derive(Message)]
 #[rtype(result = "()")]
 pub struct UserMessage {
-    pub id: Uuid,
-    pub event: Event
+    pub self_id: Uuid,
+    pub event: Event,
 }

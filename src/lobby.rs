@@ -1,13 +1,12 @@
-use crate::messages::{Connect, Disconnect, WsMessage, UserMessage};
+use crate::messages::{Connect, Disconnect, UserMessage, WsMessage};
 use actix::prelude::{Actor, Context, Handler, Recipient};
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
 type Socket = Recipient<WsMessage>;
 
-#[derive(Debug)]
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Event {
     SelfJoined(Uuid),
@@ -98,6 +97,23 @@ impl Handler<UserMessage> for Lobby {
     type Result = ();
 
     fn handle(&mut self, msg: UserMessage, _: &mut Context<Self>) -> Self::Result {
-        println!("{:?}", msg.event);
+        match msg.event {
+            Event::ICECandidate(id, description) => {
+                let event = Event::ICECandidate(msg.self_id, description);
+                let json = serde_json::to_string_pretty(&event).unwrap();
+                self.send_message(&json, &id)
+            }
+            Event::RTCConnectionOffer(id, description) => {
+                let event = Event::RTCConnectionOffer(msg.self_id, description);
+                let json = serde_json::to_string_pretty(&event).unwrap();
+                self.send_message(&json, &id)
+            }
+            Event::RTCConnectionAnswer(id, description) => {
+                let event = Event::RTCConnectionAnswer(msg.self_id, description);
+                let json = serde_json::to_string_pretty(&event).unwrap();
+                self.send_message(&json, &id)
+            }
+            event => println!("unknown event: {:?}", event),
+        }
     }
 }
