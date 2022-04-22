@@ -140,10 +140,14 @@ pub async fn start_connection(
 async fn main() -> std::io::Result<()> {
     let lobby = Lobby::default().start();
 
-    HttpServer::new(move || {
+    let bind_to = "127.0.0.1:4000";
+    let server = HttpServer::new(move || {
         App::new().data(lobby.clone()).service(start_connection) //. rename with "as" import or naming conflict
     })
-    .bind("127.0.0.1:4000")?
-    .run()
-    .await
+    .bind(bind_to)?
+    .run();
+
+    println!("Server running on {}", bind_to);
+    
+    server.await
 }
