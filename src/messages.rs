@@ -19,7 +19,6 @@ pub struct Connect {
 #[derive(Message)]
 #[rtype(result = "()")]
 pub struct Disconnect {
-    pub lobby_id: Uuid,
     pub id: Uuid,
 }
 

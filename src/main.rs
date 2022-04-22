@@ -107,7 +107,7 @@ impl Actor for Connection {
     }
 
     fn stopping(&mut self, _: &mut Self::Context) -> Running {
-        //self.lobby_addr.do_send(Disconnect { id: self.id, lobby_id: self.lobby });
+        self.lobby_addr.do_send(Disconnect { id: self.id });
         Running::Stop
     }
 }
