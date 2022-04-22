@@ -1,6 +1,8 @@
 // see https://levelup.gitconnected.com/websockets-in-actix-web-full-tutorial-websockets-actors-f7f9484f5086
 use actix::{fut, ActorContext};
-use actix::{Actor, Addr, ContextFutureSpawner, Running, StreamHandler, WrapFuture, ActorFutureExt};
+use actix::{
+    Actor, ActorFutureExt, Addr, ContextFutureSpawner, Running, StreamHandler, WrapFuture,
+};
 use actix::{AsyncContext, Handler};
 use actix_web::{get, middleware::Logger, web, App, Error, HttpRequest, HttpResponse, HttpServer};
 use actix_web_actors::ws;
@@ -149,6 +151,6 @@ async fn main() -> std::io::Result<()> {
     .run();
 
     println!("Server running on {}", bind_to);
-    
+
     server.await
 }
