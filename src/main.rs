@@ -4,7 +4,9 @@ use actix::{
     Actor, ActorFutureExt, Addr, ContextFutureSpawner, Running, StreamHandler, WrapFuture,
 };
 use actix::{AsyncContext, Handler};
-use actix_web::{get, middleware::Logger, web, App, Error, HttpRequest, HttpResponse, HttpServer};
+use actix_web::{
+    get, middleware::Logger, web, web::Data, App, Error, HttpRequest, HttpResponse, HttpServer,
+};
 use actix_web_actors::ws;
 use actix_web_actors::ws::Message::Text;
 use serde_json;
@@ -134,7 +136,7 @@ pub async fn start_connection(
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    let lobby = Lobby::default().start();
+    let lobby = Data::new(Lobby::default().start());
 
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
 
@@ -142,7 +144,7 @@ async fn main() -> std::io::Result<()> {
     let server = HttpServer::new(move || {
         App::new()
             .wrap(Logger::default())
-            .data(lobby.clone())
+            .app_data(lobby.clone())
             .service(start_connection)
     })
     .bind(bind_to)?
