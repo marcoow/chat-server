@@ -39,7 +39,7 @@ impl Connection {
         ctx.run_interval(HEARTBEAT_INTERVAL, |act, ctx| {
             if Instant::now().duration_since(act.hb) > CLIENT_TIMEOUT {
                 println!("Disconnecting failed heartbeat");
-                //act.lobby_addr.do_send(Disconnect { id: act.id, lobby_id: act.lobby });
+                act.lobby_addr.do_send(Disconnect { id: act.id });
                 ctx.stop();
                 return;
             }
