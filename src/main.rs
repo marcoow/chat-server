@@ -8,7 +8,6 @@ use actix_web::{get, middleware::Logger, web, App, Error, HttpRequest, HttpRespo
 use actix_web_actors::ws;
 use actix_web_actors::ws::Message::Text;
 use serde_json;
-use std::collections::HashMap;
 use std::time::{Duration, Instant};
 use uuid::Uuid;
 
@@ -50,10 +49,6 @@ impl Connection {
     }
 }
 
-struct AppState {
-    lobby_addrs: Addr<Lobby>,
-}
-
 impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for Connection {
     fn handle(&mut self, msg: Result<ws::Message, ws::ProtocolError>, ctx: &mut Self::Context) {
         match msg {
@@ -80,7 +75,7 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for Connection {
                         self_id: self.id,
                         event,
                     }),
-                    Err(error) => println!("unknown message: {:?}", s),
+                    Err(_error) => println!("unknown message: {:?}", s),
                 };
             }
             Err(e) => panic!("{}", e),
@@ -129,10 +124,8 @@ impl Handler<WsMessage> for Connection {
 pub async fn start_connection(
     req: HttpRequest,
     stream: web::Payload,
-    path: web::Path<(String,)>,
     srv: web::Data<Addr<Lobby>>,
 ) -> Result<HttpResponse, Error> {
-    let lobby_id = path.into_inner().0;
     let ws = Connection::new(srv.get_ref().clone());
 
     let resp = ws::start(ws, &req, stream)?;

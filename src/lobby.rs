@@ -1,7 +1,7 @@
 use crate::messages::{Connect, Disconnect, UserMessage, WsMessage};
 use actix::prelude::{Actor, Context, Handler, Recipient};
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use uuid::Uuid;
 
 type Socket = Recipient<WsMessage>;
