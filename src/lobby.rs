@@ -1,10 +1,10 @@
-use crate::messages::{Connect, Disconnect, UserMessage, WsMessage};
 use actix::prelude::{Actor, Context, Handler, Recipient};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::string::String;
 use uuid::Uuid;
 
-type Socket = Recipient<WsMessage>;
+use crate::messages::{Connect, Disconnect, UserMessage, WebSocketMessage};
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data")]
@@ -26,24 +26,30 @@ pub enum Event {
 }
 
 pub struct Lobby {
-    sessions: HashMap<Uuid, Socket>, //self id to self
+    sessions: HashMap<Uuid, Recipient<WebSocketMessage>>,
 }
 
-impl Default for Lobby {
-    fn default() -> Lobby {
+impl Lobby {
+    pub fn new() -> Lobby {
         Lobby {
             sessions: HashMap::new(),
         }
     }
-}
 
-impl Lobby {
-    fn send_message(&self, message: &str, id_to: &Uuid) {
-        if let Some(socket_recipient) = self.sessions.get(id_to) {
-            let _ = socket_recipient.do_send(WsMessage(message.to_owned()));
+    fn send_message(&self, message: &str, recipient_id: &Uuid) {
+        if let Some(socket_recipient) = self.sessions.get(recipient_id) {
+            socket_recipient.do_send(WebSocketMessage(message.to_owned()));
         } else {
-            println!("attempting to send message but couldn't find user id.");
+            println!(
+                "attempting to send message but couldn't find user id {:?}.",
+                recipient_id
+            );
         }
+    }
+
+    fn send_event(&self, event: Event, recipient_id: &Uuid) {
+        let json = serde_json::to_string_pretty(&event).unwrap();
+        self.send_message(&json, recipient_id);
     }
 }
 
@@ -55,32 +61,21 @@ impl Handler<Connect> for Lobby {
     type Result = ();
 
     fn handle(&mut self, msg: Connect, _: &mut Context<Self>) -> Self::Result {
-        // store the address
+        // store the new user
         self.sessions.insert(msg.id, msg.addr);
 
-        // send to everyone in the room that new uuid just joined
+        self.send_event(Event::SelfJoined { id: msg.id }, &msg.id);
+
         self.sessions
             .keys()
             .filter(|conn_id| *conn_id.to_owned() != msg.id)
             .for_each(|conn_id| {
-                let event = Event::UserJoined { id: msg.id };
-                let json = serde_json::to_string_pretty(&event).unwrap();
-                self.send_message(&json, conn_id)
-            });
+                // send to everyone in the room that new uuid just joined
+                self.send_event(Event::UserJoined { id: msg.id }, conn_id);
 
-        // send me all the uuids of everyone who is already there
-        self.sessions
-            .keys()
-            .filter(|conn_id| *conn_id.to_owned() != msg.id)
-            .for_each(|conn_id| {
-                let event = Event::UserPresent { id: *conn_id };
-                let json = serde_json::to_string_pretty(&event).unwrap();
-                self.send_message(&json, &msg.id)
+                // send the new user all the uuids of everyone who is already there
+                self.send_event(Event::UserPresent { id: *conn_id }, &msg.id);
             });
-
-        let event = Event::SelfJoined { id: msg.id };
-        let json = serde_json::to_string_pretty(&event).unwrap();
-        self.send_message(&json, &msg.id);
     }
 }
 
@@ -88,14 +83,12 @@ impl Handler<Disconnect> for Lobby {
     type Result = ();
 
     fn handle(&mut self, msg: Disconnect, _: &mut Context<Self>) -> Self::Result {
-        // remove the address
+        // remove the disconnected user
         self.sessions.remove(&msg.id);
 
         // send to everyone in the room that new uuid just left
         self.sessions.keys().for_each(|conn_id| {
-            let event = Event::UserLeft { id: msg.id };
-            let json = serde_json::to_string_pretty(&event).unwrap();
-            self.send_message(&json, conn_id);
+            self.send_event(Event::UserLeft { id: msg.id }, conn_id);
         });
     }
 }
@@ -104,32 +97,32 @@ impl Handler<UserMessage> for Lobby {
     type Result = ();
 
     fn handle(&mut self, msg: UserMessage, _: &mut Context<Self>) -> Self::Result {
-        match msg.event {
-            Event::ICECandidate { id, description } => {
-                let event = Event::ICECandidate {
+        let event: Result<Event, serde_json::Error> = serde_json::from_str(&msg.payload);
+
+        match event {
+            Ok(Event::ICECandidate { id, description }) => self.send_event(
+                Event::ICECandidate {
                     id: msg.id,
                     description,
-                };
-                let json = serde_json::to_string_pretty(&event).unwrap();
-                self.send_message(&json, &id)
-            }
-            Event::RTCConnectionOffer { id, description } => {
-                let event = Event::RTCConnectionOffer {
+                },
+                &id,
+            ),
+            Ok(Event::RTCConnectionOffer { id, description }) => self.send_event(
+                Event::RTCConnectionOffer {
                     id: msg.id,
                     description,
-                };
-                let json = serde_json::to_string_pretty(&event).unwrap();
-                self.send_message(&json, &id)
-            }
-            Event::RTCConnectionAnswer { id, description } => {
-                let event = Event::RTCConnectionAnswer {
+                },
+                &id,
+            ),
+            Ok(Event::RTCConnectionAnswer { id, description }) => self.send_event(
+                Event::RTCConnectionAnswer {
                     id: msg.id,
                     description,
-                };
-                let json = serde_json::to_string_pretty(&event).unwrap();
-                self.send_message(&json, &id)
-            }
-            event => println!("unknown event: {:?}", event),
+                },
+                &id,
+            ),
+            Ok(event) => println!("unexpected event: {:?}", event),
+            Err(_error) => println!("unknown message: {:?}", msg.payload),
         }
     }
 }
