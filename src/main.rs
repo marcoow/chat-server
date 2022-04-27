@@ -73,10 +73,7 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for Connection {
             Ok(Text(s)) => {
                 let deserialized: Result<Event, serde_json::Error> = serde_json::from_str(&s);
                 match deserialized {
-                    Ok(event) => self.lobby_addr.do_send(UserMessage {
-                        self_id: self.id,
-                        event,
-                    }),
+                    Ok(event) => self.lobby_addr.do_send(UserMessage { id: self.id, event }),
                     Err(_error) => println!("unknown message: {:?}", s),
                 };
             }
@@ -95,7 +92,7 @@ impl Actor for Connection {
         self.lobby_addr
             .send(Connect {
                 addr: addr.recipient(),
-                self_id: self.id,
+                id: self.id,
             })
             .into_actor(self)
             .then(|res, _, ctx| {

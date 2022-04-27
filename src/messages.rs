@@ -13,7 +13,7 @@ pub struct WsMessage(pub String);
 #[rtype(result = "()")]
 pub struct Connect {
     pub addr: Recipient<WsMessage>,
-    pub self_id: Uuid,
+    pub id: Uuid,
 }
 
 //WsConn sends this to a lobby to say "take me out please"
@@ -26,6 +26,6 @@ pub struct Disconnect {
 #[derive(Message)]
 #[rtype(result = "()")]
 pub struct UserMessage {
-    pub self_id: Uuid,
+    pub id: Uuid,
     pub event: Event,
 }
