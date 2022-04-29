@@ -3,6 +3,9 @@ use actix_web::{
     get, middleware::Logger, web, web::Data, App, Error, HttpRequest, HttpResponse, HttpServer,
 };
 use actix_web_actors::ws;
+use std::collections::HashMap;
+use std::sync::Mutex;
+use uuid::{uuid, Uuid};
 
 mod messages;
 
@@ -12,13 +15,36 @@ use lobby::Lobby;
 mod connection;
 use connection::Connection;
 
+pub struct AppState {
+    lobbies: Mutex<HashMap<Uuid, Addr<Lobby>>>,
+}
+
+impl AppState {
+    fn new() -> AppState {
+        AppState {
+            lobbies: Mutex::new(HashMap::new()),
+        }
+    }
+}
+
 #[get("/{lobby_id}")]
 pub async fn start_connection(
     req: HttpRequest,
     stream: web::Payload,
-    srv: web::Data<Addr<Lobby>>,
+    data: Data<AppState>,
 ) -> Result<HttpResponse, Error> {
-    let ws = Connection::new(srv.get_ref().clone());
+    // TODO: this should be the lobby_id in the path later on
+    let lobby_id: Uuid = uuid!("27a64ebc-06c9-4f14-bf8b-fafce92d6396");
+    let mut lobbies = data.lobbies.lock().unwrap();
+    let lobby_addr = match lobbies.get(&lobby_id) {
+        Some(lobby) => lobby.clone(),
+        None => {
+            let new_lobby = Lobby::new().start();
+            lobbies.insert(lobby_id, new_lobby.clone());
+            new_lobby
+        }
+    };
+    let ws = Connection::new(lobby_addr);
 
     let resp = ws::start(ws, &req, stream)?;
     Ok(resp)
@@ -26,7 +52,7 @@ pub async fn start_connection(
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    let lobby = Data::new(Lobby::new().start());
+    let data = Data::new(AppState::new());
 
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
 
@@ -34,7 +60,7 @@ async fn main() -> std::io::Result<()> {
     let server = HttpServer::new(move || {
         App::new()
             .wrap(Logger::default())
-            .app_data(lobby.clone())
+            .app_data(data.clone())
             .service(start_connection)
     })
     .bind(bind_to)?
