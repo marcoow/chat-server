@@ -8,22 +8,22 @@ use uuid::Uuid;
 
 use crate::messages::{Connect, Disconnect, UserMessage, WebSocketMessage};
 
-use crate::lobby::Lobby;
+use crate::room::Room;
 
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
 const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
 
 pub struct Connection {
-    lobby_addr: Addr<Lobby>,
+    room_addr: Addr<Room>,
     last_heartbeat: Instant,
     id: Uuid,
 }
 
 impl Connection {
-    pub fn new(lobby_addr: Addr<Lobby>) -> Connection {
+    pub fn new(room_addr: Addr<Room>) -> Connection {
         Connection {
             id: Uuid::new_v4(),
-            lobby_addr,
+            room_addr,
             last_heartbeat: Instant::now(),
         }
     }
@@ -32,7 +32,7 @@ impl Connection {
         ctx.run_interval(HEARTBEAT_INTERVAL, |act, ctx| {
             if Instant::now().duration_since(act.last_heartbeat) > CLIENT_TIMEOUT {
                 println!("Disconnecting because of failed heartbeat");
-                act.lobby_addr.do_send(Disconnect { id: act.id });
+                act.room_addr.do_send(Disconnect { id: act.id });
                 ctx.stop();
                 return;
             }
@@ -62,7 +62,7 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for Connection {
             }
             Ok(ws::Message::Nop) => (),
             Ok(ws::Message::Text(text)) => {
-                self.lobby_addr.do_send(UserMessage {
+                self.room_addr.do_send(UserMessage {
                     id: self.id,
                     payload: text.to_string(),
                 });
@@ -79,7 +79,7 @@ impl Actor for Connection {
         self.heartbeat(ctx);
 
         let addr = ctx.address();
-        self.lobby_addr
+        self.room_addr
             .send(Connect {
                 addr: addr.recipient(),
                 id: self.id,
@@ -96,7 +96,7 @@ impl Actor for Connection {
     }
 
     fn stopping(&mut self, _: &mut Self::Context) -> Running {
-        self.lobby_addr.do_send(Disconnect { id: self.id });
+        self.room_addr.do_send(Disconnect { id: self.id });
         Running::Stop
     }
 }

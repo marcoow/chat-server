@@ -25,13 +25,13 @@ pub enum Event {
     RTCConnectionAnswer { id: Uuid, description: String },
 }
 
-pub struct Lobby {
+pub struct Room {
     sessions: HashMap<Uuid, Recipient<WebSocketMessage>>,
 }
 
-impl Lobby {
-    pub fn new() -> Lobby {
-        Lobby {
+impl Room {
+    pub fn new() -> Room {
+        Room {
             sessions: HashMap::new(),
         }
     }
@@ -53,11 +53,11 @@ impl Lobby {
     }
 }
 
-impl Actor for Lobby {
+impl Actor for Room {
     type Context = Context<Self>;
 }
 
-impl Handler<Connect> for Lobby {
+impl Handler<Connect> for Room {
     type Result = ();
 
     fn handle(&mut self, msg: Connect, _: &mut Context<Self>) -> Self::Result {
@@ -79,7 +79,7 @@ impl Handler<Connect> for Lobby {
     }
 }
 
-impl Handler<Disconnect> for Lobby {
+impl Handler<Disconnect> for Room {
     type Result = ();
 
     fn handle(&mut self, msg: Disconnect, _: &mut Context<Self>) -> Self::Result {
@@ -93,7 +93,7 @@ impl Handler<Disconnect> for Lobby {
     }
 }
 
-impl Handler<UserMessage> for Lobby {
+impl Handler<UserMessage> for Room {
     type Result = ();
 
     fn handle(&mut self, msg: UserMessage, _: &mut Context<Self>) -> Self::Result {

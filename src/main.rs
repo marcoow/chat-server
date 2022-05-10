@@ -9,42 +9,42 @@ use uuid::{uuid, Uuid};
 
 mod messages;
 
-mod lobby;
-use lobby::Lobby;
+mod room;
+use room::Room;
 
 mod connection;
 use connection::Connection;
 
 pub struct AppState {
-    lobbies: Mutex<HashMap<Uuid, Addr<Lobby>>>,
+    rooms: Mutex<HashMap<Uuid, Addr<Room>>>,
 }
 
 impl AppState {
     fn new() -> AppState {
         AppState {
-            lobbies: Mutex::new(HashMap::new()),
+            rooms: Mutex::new(HashMap::new()),
         }
     }
 }
 
-#[get("/{lobby_id}")]
+#[get("/{room_id}")]
 pub async fn start_connection(
     req: HttpRequest,
     stream: web::Payload,
     data: Data<AppState>,
 ) -> Result<HttpResponse, Error> {
-    // TODO: this should be the lobby_id in the path later on
-    let lobby_id: Uuid = uuid!("27a64ebc-06c9-4f14-bf8b-fafce92d6396");
-    let mut lobbies = data.lobbies.lock().unwrap();
-    let lobby_addr = match lobbies.get(&lobby_id) {
-        Some(lobby) => lobby.clone(),
+    // TODO: this should be the room_id in the path later on
+    let room_id: Uuid = uuid!("27a64ebc-06c9-4f14-bf8b-fafce92d6396");
+    let mut rooms = data.rooms.lock().unwrap();
+    let room_addr = match rooms.get(&room_id) {
+        Some(room) => room.clone(),
         None => {
-            let new_lobby = Lobby::new().start();
-            lobbies.insert(lobby_id, new_lobby.clone());
-            new_lobby
+            let new_room = Room::new().start();
+            rooms.insert(room_id, new_room.clone());
+            new_room
         }
     };
-    let ws = Connection::new(lobby_addr);
+    let ws = Connection::new(room_addr);
 
     let resp = ws::start(ws, &req, stream)?;
     Ok(resp)
