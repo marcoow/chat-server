@@ -27,6 +27,7 @@ pub enum Event {
 }
 
 pub struct Room {
+    id: Uuid,
     name: String,
     admin_token: String,
     sessions: HashMap<Uuid, Recipient<WebSocketMessage>>,
@@ -37,6 +38,7 @@ impl Room {
         let random_string = repeat_with(fastrand::alphanumeric).take(32).collect();
 
         Room {
+            id: Uuid::new_v4(),
             name,
             admin_token: random_string,
             sessions: HashMap::new(),
