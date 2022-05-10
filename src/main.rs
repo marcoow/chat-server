@@ -1,4 +1,5 @@
 use actix_web::{middleware::Logger, web::Data, App, HttpServer};
+use actix_cors::Cors;
 
 mod app_state;
 mod connection;
@@ -19,6 +20,7 @@ async fn main() -> std::io::Result<()> {
     let server = HttpServer::new(move || {
         App::new()
             .wrap(Logger::default())
+            .wrap(Cors::permissive())
             .app_data(data.clone())
             .service(start_connection)
     })
