@@ -1,6 +1,7 @@
 use actix::prelude::{Actor, Context, Handler, Recipient};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::iter::repeat_with;
 use std::string::String;
 use uuid::Uuid;
 
@@ -27,13 +28,17 @@ pub enum Event {
 
 pub struct Room {
     name: String,
+    admin_token: String,
     sessions: HashMap<Uuid, Recipient<WebSocketMessage>>,
 }
 
 impl Room {
     pub fn new(name: String) -> Room {
+        let random_string = repeat_with(fastrand::alphanumeric).take(32).collect();
+
         Room {
             name,
+            admin_token: random_string,
             sessions: HashMap::new(),
         }
     }
