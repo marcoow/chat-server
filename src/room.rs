@@ -26,12 +26,14 @@ pub enum Event {
 }
 
 pub struct Room {
+    name: String,
     sessions: HashMap<Uuid, Recipient<WebSocketMessage>>,
 }
 
 impl Room {
-    pub fn new() -> Room {
+    pub fn new(name: String) -> Room {
         Room {
+            name,
             sessions: HashMap::new(),
         }
     }
