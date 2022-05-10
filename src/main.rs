@@ -1,54 +1,13 @@
-use actix::{Actor, Addr};
-use actix_web::{
-    get, middleware::Logger, web, web::Data, App, Error, HttpRequest, HttpResponse, HttpServer,
-};
-use actix_web_actors::ws;
-use std::collections::HashMap;
-use std::sync::Mutex;
-use uuid::{uuid, Uuid};
+use actix_web::{middleware::Logger, web::Data, App, HttpServer};
 
-mod messages;
-
-mod room;
-use room::Room;
-
+mod app_state;
 mod connection;
-use connection::Connection;
+mod handlers;
+mod messages;
+mod room;
 
-pub struct AppState {
-    rooms: Mutex<HashMap<Uuid, Addr<Room>>>,
-}
-
-impl AppState {
-    fn new() -> AppState {
-        AppState {
-            rooms: Mutex::new(HashMap::new()),
-        }
-    }
-}
-
-#[get("/{room_id}")]
-pub async fn start_connection(
-    req: HttpRequest,
-    stream: web::Payload,
-    data: Data<AppState>,
-) -> Result<HttpResponse, Error> {
-    // TODO: this should be the room_id in the path later on
-    let room_id: Uuid = uuid!("27a64ebc-06c9-4f14-bf8b-fafce92d6396");
-    let mut rooms = data.rooms.lock().unwrap();
-    let room_addr = match rooms.get(&room_id) {
-        Some(room) => room.clone(),
-        None => {
-            let new_room = Room::new("test".to_string()).start();
-            rooms.insert(room_id, new_room.clone());
-            new_room
-        }
-    };
-    let ws = Connection::new(room_addr);
-
-    let resp = ws::start(ws, &req, stream)?;
-    Ok(resp)
-}
+use app_state::AppState;
+use handlers::start_connection::start_connection;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
