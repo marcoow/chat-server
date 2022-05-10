@@ -1,5 +1,5 @@
-use actix_web::{middleware::Logger, web::Data, App, HttpServer};
 use actix_cors::Cors;
+use actix_web::{middleware::Logger, web, web::Data, App, HttpServer};
 
 mod app_state;
 mod connection;
@@ -8,6 +8,7 @@ mod messages;
 mod room;
 
 use app_state::AppState;
+use handlers::create_room::create_room;
 use handlers::start_connection::start_connection;
 
 #[actix_web::main]
@@ -23,6 +24,7 @@ async fn main() -> std::io::Result<()> {
             .wrap(Cors::permissive())
             .app_data(data.clone())
             .service(start_connection)
+            .route("/rooms", web::post().to(create_room))
     })
     .bind(bind_to)?
     .run();
