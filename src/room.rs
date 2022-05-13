@@ -12,10 +12,8 @@ use crate::messages::{Connect, Disconnect, UserMessage, WebSocketMessage};
 pub enum Event {
     #[serde(rename = "self-joined")]
     SelfJoined { id: Uuid },
-    #[serde(rename = "user-present")]
-    UserPresent { id: Uuid },
-    #[serde(rename = "user-joined")]
-    UserJoined { id: Uuid },
+    #[serde(rename = "user-matched")]
+    UserMatched { id: Uuid },
     #[serde(rename = "user-left")]
     UserLeft { id: Uuid },
     #[serde(rename = "ice-candidate")]
@@ -31,6 +29,7 @@ pub struct Room {
     pub name: String,
     pub admin_token: String,
     sessions: HashMap<Uuid, Recipient<WebSocketMessage>>,
+    previous_matches: Vec<(Uuid, Uuid)>,
 }
 
 impl Room {
@@ -42,6 +41,7 @@ impl Room {
             name,
             admin_token: random_string,
             sessions: HashMap::new(),
+            previous_matches: Vec::new(),
         }
     }
 
@@ -75,16 +75,13 @@ impl Handler<Connect> for Room {
 
         self.send_event(Event::SelfJoined { id: msg.id }, &msg.id);
 
-        self.sessions
-            .keys()
-            .filter(|conn_id| *conn_id.to_owned() != msg.id)
-            .for_each(|conn_id| {
-                // send to everyone in the room that new uuid just joined
-                self.send_event(Event::UserJoined { id: msg.id }, conn_id);
-
-                // send the new user all the uuids of everyone who is already there
-                self.send_event(Event::UserPresent { id: *conn_id }, &msg.id);
-            });
+        match self.make_match(msg.id) {
+            Some((self_id, other_user_id)) => {
+                // send the new user the Id of the other user to connect to
+                self.send_event(Event::UserMatched { id: other_user_id }, &self_id);
+            }
+            None => (),
+        }
     }
 }
 
@@ -132,6 +129,37 @@ impl Handler<UserMessage> for Room {
             ),
             Ok(event) => println!("unexpected event: {:?}", event),
             Err(_error) => println!("unknown message: {:?}", msg.payload),
+        }
+    }
+}
+
+impl Room {
+    // TODO: this also needs to consider currently active matches and must not match with a user that's currently in an active match
+    fn make_match(&mut self, new_user_id: Uuid) -> Option<(Uuid, Uuid)> {
+        let new_user = [new_user_id];
+        let other_users = self
+            .sessions
+            .keys()
+            .filter(|conn_id| *conn_id.to_owned() != new_user_id);
+
+        let next_match = new_user
+            .iter()
+            .zip(other_users.clone())
+            .map(|(a, b)| (*a, *b))
+            .filter(|(a, b)| {
+                !self
+                    .previous_matches
+                    .iter()
+                    .any(|(pa, pb)| (pa == a && pb == b) || (pa == b && pb == a))
+            })
+            .next();
+
+        match next_match {
+            None => return None,
+            Some(next_match) => {
+                self.previous_matches.push(next_match);
+                Some(next_match)
+            }
         }
     }
 }
