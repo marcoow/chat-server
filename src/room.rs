@@ -27,9 +27,9 @@ pub enum Event {
 }
 
 pub struct Room {
-    id: Uuid,
-    name: String,
-    admin_token: String,
+    pub id: Uuid,
+    pub name: String,
+    pub admin_token: String,
     sessions: HashMap<Uuid, Recipient<WebSocketMessage>>,
 }
 
