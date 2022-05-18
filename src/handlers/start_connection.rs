@@ -7,12 +7,14 @@ use crate::app_state::AppState;
 use crate::connection::Connection;
 use crate::room::Room;
 
-#[get("/{room_id}")]
+#[get("/{room_id}/{name}")]
 pub async fn start_connection(
     req: HttpRequest,
     stream: web::Payload,
     data: Data<AppState>,
+    path: web::Path<(String, String)>,
 ) -> Result<HttpResponse, Error> {
+    let (_room_id, name) = path.into_inner();
     // TODO: this should be the room_id in the path later on
     let room_id: Uuid = uuid!("27a64ebc-06c9-4f14-bf8b-fafce92d6396");
     let mut rooms = data.rooms.lock().unwrap();
@@ -24,7 +26,7 @@ pub async fn start_connection(
             new_room
         }
     };
-    let ws = Connection::new(room_addr);
+    let ws = Connection::new(name, room_addr);
 
     let resp = ws::start(ws, &req, stream)?;
     Ok(resp)

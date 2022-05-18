@@ -17,12 +17,14 @@ pub struct Connection {
     room_addr: Addr<Room>,
     last_heartbeat: Instant,
     id: Uuid,
+    name: String,
 }
 
 impl Connection {
-    pub fn new(room_addr: Addr<Room>) -> Connection {
+    pub fn new(name: String, room_addr: Addr<Room>) -> Connection {
         Connection {
             id: Uuid::new_v4(),
+            name,
             room_addr,
             last_heartbeat: Instant::now(),
         }
@@ -82,6 +84,7 @@ impl Actor for Connection {
         self.room_addr
             .send(Connect {
                 addr: addr.recipient(),
+                name: self.name.clone(),
                 id: self.id,
             })
             .into_actor(self)

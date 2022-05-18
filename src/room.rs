@@ -24,11 +24,16 @@ pub enum Event {
     RTCConnectionAnswer { id: Uuid, description: String },
 }
 
+struct ConnectionInfo {
+    name: String,
+    socket_recipient: Recipient<WebSocketMessage>,
+}
+
 pub struct Room {
     pub id: Uuid,
     pub name: String,
     pub admin_token: String,
-    sessions: HashMap<Uuid, Recipient<WebSocketMessage>>,
+    sessions: HashMap<Uuid, ConnectionInfo>,
     previous_matches: Vec<(Uuid, Uuid)>,
 }
 
@@ -46,8 +51,10 @@ impl Room {
     }
 
     fn send_message(&self, message: &str, recipient_id: &Uuid) {
-        if let Some(socket_recipient) = self.sessions.get(recipient_id) {
-            socket_recipient.do_send(WebSocketMessage(message.to_owned()));
+        if let Some(connection_info) = self.sessions.get(recipient_id) {
+            connection_info
+                .socket_recipient
+                .do_send(WebSocketMessage(message.to_owned()));
         } else {
             println!(
                 "attempting to send message but couldn't find user id {:?}.",
@@ -71,7 +78,13 @@ impl Handler<Connect> for Room {
 
     fn handle(&mut self, msg: Connect, _: &mut Context<Self>) -> Self::Result {
         // store the new user
-        self.sessions.insert(msg.id, msg.addr);
+        self.sessions.insert(
+            msg.id,
+            ConnectionInfo {
+                name: msg.name,
+                socket_recipient: msg.addr,
+            },
+        );
 
         self.send_event(Event::SelfJoined { id: msg.id }, &msg.id);
 

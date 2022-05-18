@@ -11,6 +11,7 @@ pub struct WebSocketMessage(pub String);
 pub struct Connect {
     pub addr: Recipient<WebSocketMessage>,
     pub id: Uuid,
+    pub name: String,
 }
 
 #[derive(Message)]
