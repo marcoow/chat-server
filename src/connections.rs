@@ -15,6 +15,7 @@ use crate::room::Room;
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
 const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
 
+// TODO: it might be simpler to use one struct for this with an enum for the kind and in the case of the user that would just have some additional data associated to it like the name
 pub struct User {
     room_addr: Addr<Room>,
     last_heartbeat: Instant,
