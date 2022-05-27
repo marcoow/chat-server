@@ -16,7 +16,20 @@ pub struct Connect {
 
 #[derive(Message)]
 #[rtype(result = "()")]
+pub struct AdminConnect {
+    pub addr: Recipient<WebSocketMessage>,
+    pub id: Uuid,
+}
+
+#[derive(Message)]
+#[rtype(result = "()")]
 pub struct Disconnect {
+    pub id: Uuid,
+}
+
+#[derive(Message)]
+#[rtype(result = "()")]
+pub struct AdminDisconnect {
     pub id: Uuid,
 }
 

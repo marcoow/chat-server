@@ -5,13 +5,19 @@ use std::iter::repeat_with;
 use std::string::String;
 use uuid::Uuid;
 
-use crate::messages::{Connect, Disconnect, UserMessage, WebSocketMessage};
+use crate::messages::{
+    AdminConnect, AdminDisconnect, Connect, Disconnect, UserMessage, WebSocketMessage,
+};
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data")]
 pub enum Event {
     #[serde(rename = "self-joined")]
     SelfJoined { id: Uuid },
+    #[serde(rename = "user-joined")]
+    UserJoined { id: Uuid, name: String },
+    #[serde(rename = "user-present")]
+    UserPresent { id: Uuid, name: String },
     #[serde(rename = "user-matched")]
     UserMatched { id: Uuid },
     #[serde(rename = "user-left")]
@@ -29,10 +35,15 @@ struct ConnectionInfo {
     socket_recipient: Recipient<WebSocketMessage>,
 }
 
+struct AdminConnectionInfo {
+    socket_recipient: Recipient<WebSocketMessage>,
+}
+
 pub struct Room {
     pub id: Uuid,
     pub name: String,
     pub admin_token: String,
+    admins: HashMap<Uuid, AdminConnectionInfo>,
     sessions: HashMap<Uuid, ConnectionInfo>,
     previous_matches: Vec<(Uuid, Uuid)>,
 }
@@ -45,6 +56,7 @@ impl Room {
             id: Uuid::new_v4(),
             name,
             admin_token: random_string,
+            admins: HashMap::new(),
             sessions: HashMap::new(),
             previous_matches: Vec::new(),
         }
@@ -52,6 +64,10 @@ impl Room {
 
     fn send_message(&self, message: &str, recipient_id: &Uuid) {
         if let Some(connection_info) = self.sessions.get(recipient_id) {
+            connection_info
+                .socket_recipient
+                .do_send(WebSocketMessage(message.to_owned()));
+        } else if let Some(connection_info) = self.admins.get(recipient_id) {
             connection_info
                 .socket_recipient
                 .do_send(WebSocketMessage(message.to_owned()));
@@ -81,7 +97,7 @@ impl Handler<Connect> for Room {
         self.sessions.insert(
             msg.id,
             ConnectionInfo {
-                name: msg.name,
+                name: msg.name.clone(),
                 socket_recipient: msg.addr,
             },
         );
@@ -95,6 +111,42 @@ impl Handler<Connect> for Room {
             }
             None => (),
         }
+
+        // send to all admins in the room that the user joined
+        self.admins.keys().for_each(|conn_id| {
+            self.send_event(
+                Event::UserJoined {
+                    id: msg.id,
+                    name: msg.name.clone(),
+                },
+                conn_id,
+            );
+        });
+    }
+}
+
+impl Handler<AdminConnect> for Room {
+    type Result = ();
+
+    fn handle(&mut self, msg: AdminConnect, _: &mut Context<Self>) -> Self::Result {
+        // store the new admin
+        self.admins.insert(
+            msg.id,
+            AdminConnectionInfo {
+                socket_recipient: msg.addr,
+            },
+        );
+
+        // send to the admin all already present users
+        for (id, info) in self.sessions.iter() {
+            self.send_event(
+                Event::UserPresent {
+                    id: *id,
+                    name: info.name.clone(),
+                },
+                &msg.id,
+            );
+        }
     }
 }
 
@@ -105,10 +157,25 @@ impl Handler<Disconnect> for Room {
         // remove the disconnected user
         self.sessions.remove(&msg.id);
 
+        // TODO: this should not be necessary later – should be fine to just send this to the currently matched partner
         // send to everyone in the room that new uuid just left
         self.sessions.keys().for_each(|conn_id| {
             self.send_event(Event::UserLeft { id: msg.id }, conn_id);
         });
+
+        // send to all admins in the room that the user left
+        self.admins.keys().for_each(|conn_id| {
+            self.send_event(Event::UserLeft { id: msg.id }, conn_id);
+        });
+    }
+}
+
+impl Handler<AdminDisconnect> for Room {
+    type Result = ();
+
+    fn handle(&mut self, msg: AdminDisconnect, _: &mut Context<Self>) -> Self::Result {
+        // remove the disconnected admin
+        self.admins.remove(&msg.id);
     }
 }
 
