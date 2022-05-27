@@ -1,9 +1,8 @@
 use actix_cors::Cors;
 use actix_web::{middleware::Logger, web, web::Data, App, HttpServer};
 
-mod admin_connection;
 mod app_state;
-mod connection;
+mod connections;
 mod handlers;
 mod messages;
 mod room;
