@@ -8,7 +8,7 @@ pub struct WebSocketMessage(pub String);
 
 #[derive(Message)]
 #[rtype(result = "()")]
-pub struct Connect {
+pub struct UserConnect {
     pub addr: Recipient<WebSocketMessage>,
     pub id: Uuid,
     pub name: String,
@@ -23,7 +23,7 @@ pub struct AdminConnect {
 
 #[derive(Message)]
 #[rtype(result = "()")]
-pub struct Disconnect {
+pub struct UserDisconnect {
     pub id: Uuid,
 }
 

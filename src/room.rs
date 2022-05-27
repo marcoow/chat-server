@@ -6,7 +6,7 @@ use std::string::String;
 use uuid::Uuid;
 
 use crate::messages::{
-    AdminConnect, AdminDisconnect, Connect, Disconnect, UserMessage, WebSocketMessage,
+    AdminConnect, AdminDisconnect, UserConnect, UserDisconnect, UserMessage, WebSocketMessage,
 };
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -89,10 +89,10 @@ impl Actor for Room {
     type Context = Context<Self>;
 }
 
-impl Handler<Connect> for Room {
+impl Handler<UserConnect> for Room {
     type Result = ();
 
-    fn handle(&mut self, msg: Connect, _: &mut Context<Self>) -> Self::Result {
+    fn handle(&mut self, msg: UserConnect, _: &mut Context<Self>) -> Self::Result {
         // store the new user
         self.sessions.insert(
             msg.id,
@@ -150,10 +150,10 @@ impl Handler<AdminConnect> for Room {
     }
 }
 
-impl Handler<Disconnect> for Room {
+impl Handler<UserDisconnect> for Room {
     type Result = ();
 
-    fn handle(&mut self, msg: Disconnect, _: &mut Context<Self>) -> Self::Result {
+    fn handle(&mut self, msg: UserDisconnect, _: &mut Context<Self>) -> Self::Result {
         // remove the disconnected user
         self.sessions.remove(&msg.id);
 

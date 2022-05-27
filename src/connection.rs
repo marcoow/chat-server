@@ -6,7 +6,7 @@ use actix_web_actors::ws;
 use std::time::{Duration, Instant};
 use uuid::Uuid;
 
-use crate::messages::{Connect, Disconnect, UserMessage, WebSocketMessage};
+use crate::messages::{UserConnect, UserDisconnect, UserMessage, WebSocketMessage};
 
 use crate::room::Room;
 
@@ -34,7 +34,7 @@ impl Connection {
         ctx.run_interval(HEARTBEAT_INTERVAL, |act, ctx| {
             if Instant::now().duration_since(act.last_heartbeat) > CLIENT_TIMEOUT {
                 println!("Disconnecting because of failed heartbeat");
-                act.room_addr.do_send(Disconnect { id: act.id });
+                act.room_addr.do_send(UserDisconnect { id: act.id });
                 ctx.stop();
                 return;
             }
@@ -82,7 +82,7 @@ impl Actor for Connection {
 
         let addr = ctx.address();
         self.room_addr
-            .send(Connect {
+            .send(UserConnect {
                 addr: addr.recipient(),
                 name: self.name.clone(),
                 id: self.id,
@@ -99,7 +99,7 @@ impl Actor for Connection {
     }
 
     fn stopping(&mut self, _: &mut Self::Context) -> Running {
-        self.room_addr.do_send(Disconnect { id: self.id });
+        self.room_addr.do_send(UserDisconnect { id: self.id });
         Running::Stop
     }
 }
