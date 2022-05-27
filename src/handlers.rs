@@ -4,9 +4,9 @@ use actix_web_actors::ws;
 use serde::{Deserialize, Serialize};
 use uuid::{uuid, Uuid};
 
-use crate::app_state::AppState;
 use crate::connections::{Admin as AdminConnection, User as UserConnection};
 use crate::room::Room;
+use crate::AppState;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct RoomData {

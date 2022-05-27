@@ -1,13 +1,28 @@
+use actix::Addr;
 use actix_cors::Cors;
 use actix_web::{middleware::Logger, web, web::Data, App, HttpServer};
+use std::collections::HashMap;
+use std::sync::Mutex;
+use uuid::Uuid;
 
-mod app_state;
 mod connections;
 mod handlers;
 mod messages;
 mod room;
 
-use app_state::AppState;
+use room::Room;
+
+pub struct AppState {
+    pub rooms: Mutex<HashMap<Uuid, Addr<Room>>>,
+}
+
+impl AppState {
+    pub fn new() -> AppState {
+        AppState {
+            rooms: Mutex::new(HashMap::new()),
+        }
+    }
+}
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
