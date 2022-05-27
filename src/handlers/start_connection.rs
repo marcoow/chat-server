@@ -21,6 +21,7 @@ pub async fn start_connection(
     let room_addr = match rooms.get(&room_id) {
         Some(room) => room.clone(),
         None => {
+            // TODO: this should later respond with 404
             let new_room = Room::new("test".to_string()).start();
             rooms.insert(room_id, new_room.clone());
             new_room
