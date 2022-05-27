@@ -9,9 +9,6 @@ mod messages;
 mod room;
 
 use app_state::AppState;
-use handlers::create_room::create_room;
-use handlers::start_admin_connection::start_admin_connection;
-use handlers::start_connection::start_connection;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -25,9 +22,9 @@ async fn main() -> std::io::Result<()> {
             .wrap(Logger::default())
             .wrap(Cors::permissive())
             .app_data(data.clone())
-            .service(start_admin_connection)
-            .service(start_connection)
-            .route("/rooms", web::post().to(create_room))
+            .service(handlers::start_admin_connection)
+            .service(handlers::start_connection)
+            .route("/rooms", web::post().to(handlers::create_room))
     })
     .bind(bind_to)?
     .run();
