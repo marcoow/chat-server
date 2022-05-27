@@ -63,14 +63,15 @@ impl Room {
     }
 
     fn send_message(&self, message: &str, recipient_id: &Uuid) {
+        let do_send = |socket_recipient: &Recipient<WebSocketMessage>| {
+            let websocket_body = WebSocketMessage(message.to_owned());
+            socket_recipient.do_send(websocket_body);
+        };
+
         if let Some(connection_info) = self.sessions.get(recipient_id) {
-            connection_info
-                .socket_recipient
-                .do_send(WebSocketMessage(message.to_owned()));
+            do_send(&connection_info.socket_recipient);
         } else if let Some(connection_info) = self.admins.get(recipient_id) {
-            connection_info
-                .socket_recipient
-                .do_send(WebSocketMessage(message.to_owned()));
+            do_send(&connection_info.socket_recipient);
         } else {
             println!(
                 "attempting to send message but couldn't find user id {:?}.",
