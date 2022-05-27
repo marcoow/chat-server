@@ -11,7 +11,7 @@ use crate::messages::{
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data")]
-pub enum Event {
+enum Event {
     #[serde(rename = "self-joined")]
     SelfJoined { id: Uuid },
     #[serde(rename = "user-joined")]
