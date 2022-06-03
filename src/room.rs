@@ -30,7 +30,7 @@ enum Event {
     RTCConnectionAnswer { id: Uuid, description: String },
 }
 
-struct ConnectionInfo {
+struct UserConnectionInfo {
     name: String,
     socket_recipient: Recipient<WebSocketMessage>,
 }
@@ -44,7 +44,7 @@ pub struct Room {
     pub name: String,
     pub admin_token: String,
     admins: HashMap<Uuid, AdminConnectionInfo>,
-    users: HashMap<Uuid, ConnectionInfo>,
+    users: HashMap<Uuid, UserConnectionInfo>,
     active_matches: Vec<(Uuid, Uuid)>,
     previous_matches: Vec<(Uuid, Uuid)>,
 }
@@ -121,7 +121,7 @@ impl Handler<ClientConnect> for Room {
                 // store the new user
                 self.users.insert(
                     msg.id,
-                    ConnectionInfo {
+                    UserConnectionInfo {
                         name: name.clone(),
                         socket_recipient: msg.addr,
                     },
