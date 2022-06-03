@@ -44,7 +44,7 @@ pub struct Room {
     pub name: String,
     pub admin_token: String,
     admins: HashMap<Uuid, AdminConnectionInfo>,
-    sessions: HashMap<Uuid, ConnectionInfo>,
+    users: HashMap<Uuid, ConnectionInfo>,
     previous_matches: Vec<(Uuid, Uuid)>,
 }
 
@@ -57,7 +57,7 @@ impl Room {
             name,
             admin_token: random_string,
             admins: HashMap::new(),
-            sessions: HashMap::new(),
+            users: HashMap::new(),
             previous_matches: Vec::new(),
         }
     }
@@ -68,7 +68,7 @@ impl Room {
             socket_recipient.do_send(websocket_body);
         };
 
-        if let Some(connection_info) = self.sessions.get(recipient_id) {
+        if let Some(connection_info) = self.users.get(recipient_id) {
             do_send(&connection_info.socket_recipient);
         } else if let Some(connection_info) = self.admins.get(recipient_id) {
             do_send(&connection_info.socket_recipient);
@@ -105,7 +105,7 @@ impl Handler<ClientConnect> for Room {
                 );
 
                 // send to the admin all already present users
-                for (id, info) in self.sessions.iter() {
+                for (id, info) in self.users.iter() {
                     self.send_event(
                         Event::UserPresent {
                             id: *id,
@@ -117,7 +117,7 @@ impl Handler<ClientConnect> for Room {
             }
             ClientKind::User(name) => {
                 // store the new user
-                self.sessions.insert(
+                self.users.insert(
                     msg.id,
                     ConnectionInfo {
                         name: name.clone(),
@@ -154,11 +154,11 @@ impl Handler<ClientDisconnect> for Room {
     type Result = ();
 
     fn handle(&mut self, msg: ClientDisconnect, _: &mut Context<Self>) -> Self::Result {
-        // try selecting the client from all user sessions
-        if let Some(_) = self.sessions.remove(&msg.id) {
+        // try selecting the client from all user users
+        if let Some(_) = self.users.remove(&msg.id) {
             // TODO: this should not be necessary later – should be fine to just send this to the currently matched partner
             // send to everyone in the room that new uuid just left
-            self.sessions.keys().for_each(|conn_id| {
+            self.users.keys().for_each(|conn_id| {
                 self.send_event(Event::UserLeft { id: msg.id }, conn_id);
             });
 
@@ -167,7 +167,7 @@ impl Handler<ClientDisconnect> for Room {
                 self.send_event(Event::UserLeft { id: msg.id }, conn_id);
             });
         } else {
-            // if the client wasn't among user sessions, it must have been an admin
+            // if the client wasn't among user users, it must have been an admin
             self.admins.remove(&msg.id);
         }
     }
@@ -212,7 +212,7 @@ impl Room {
     fn make_match(&mut self, new_user_id: Uuid) -> Option<(Uuid, Uuid)> {
         let new_user = [new_user_id];
         let other_users = self
-            .sessions
+            .users
             .keys()
             .filter(|conn_id| *conn_id.to_owned() != new_user_id);
 
