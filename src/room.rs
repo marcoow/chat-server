@@ -19,7 +19,7 @@ enum Event {
     #[serde(rename = "user-present")]
     UserPresent { id: Uuid, name: String },
     #[serde(rename = "user-matched")]
-    UserMatched { id: Uuid },
+    UserMatched { id: Uuid, name: String },
     #[serde(rename = "user-left")]
     UserLeft { id: Uuid },
     #[serde(rename = "ice-candidate")]
@@ -131,8 +131,12 @@ impl Handler<ClientConnect> for Room {
 
                 match self.make_match(msg.id) {
                     Some((self_id, other_user_id)) => {
-                        // send the new user the Id of the other user to connect to
-                        self.send_event(Event::UserMatched { id: other_user_id }, &self_id);
+                        if let Some(other_user) = self.users.get(&other_user_id) {
+                            // send the new user the Id of the other user to connect to
+                            self.send_event(Event::UserMatched { id: other_user_id, name: other_user.name.clone() }, &self_id);
+                        } else {
+                            // this should probably throw or something
+                        }
                     }
                     None => (),
                 }
