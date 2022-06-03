@@ -45,6 +45,7 @@ pub struct Room {
     pub admin_token: String,
     admins: HashMap<Uuid, AdminConnectionInfo>,
     users: HashMap<Uuid, ConnectionInfo>,
+    active_matches: Vec<(Uuid, Uuid)>,
     previous_matches: Vec<(Uuid, Uuid)>,
 }
 
@@ -58,6 +59,7 @@ impl Room {
             admin_token: random_string,
             admins: HashMap::new(),
             users: HashMap::new(),
+            active_matches: Vec::new(),
             previous_matches: Vec::new(),
         }
     }
@@ -231,6 +233,7 @@ impl Room {
         match next_match {
             None => return None,
             Some(next_match) => {
+                self.active_matches.push(next_match);
                 self.previous_matches.push(next_match);
                 Some(next_match)
             }
