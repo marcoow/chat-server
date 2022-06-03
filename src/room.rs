@@ -170,6 +170,7 @@ impl Handler<ClientDisconnect> for Room {
             });
         } else {
             // if the client wasn't among user users, it must have been an admin
+            // remove the admin without notifying anyone
             self.admins.remove(&msg.id);
         }
     }
@@ -210,8 +211,13 @@ impl Handler<ClientMessage> for Room {
 }
 
 impl Room {
-    // TODO: this also needs to consider currently active matches and must not match with a user that's currently in an active match
     fn make_match(&mut self, new_user_id: Uuid) -> Option<(Uuid, Uuid)> {
+        let filter_matches = |matches: &Vec<(Uuid, Uuid)>, (a, b): &(Uuid, Uuid)| -> bool {
+            !matches
+                .iter()
+                .any(|(pa, pb)| (pa == a && pb == b) || (pa == b && pb == a))
+        };
+
         let new_user = [new_user_id];
         let other_users = self
             .users
@@ -222,12 +228,8 @@ impl Room {
             .iter()
             .zip(other_users.clone())
             .map(|(a, b)| (*a, *b))
-            .filter(|(a, b)| {
-                !self
-                    .previous_matches
-                    .iter()
-                    .any(|(pa, pb)| (pa == a && pb == b) || (pa == b && pb == a))
-            })
+            .filter(|pair| filter_matches(&self.previous_matches, pair))
+            .filter(|pair| filter_matches(&self.active_matches, pair))
             .next();
 
         match next_match {
