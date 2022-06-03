@@ -133,7 +133,13 @@ impl Handler<ClientConnect> for Room {
                     Some((self_id, other_user_id)) => {
                         if let Some(other_user) = self.users.get(&other_user_id) {
                             // send the new user the Id of the other user to connect to
-                            self.send_event(Event::UserMatched { id: other_user_id, name: other_user.name.clone() }, &self_id);
+                            self.send_event(
+                                Event::UserMatched {
+                                    id: other_user_id,
+                                    name: other_user.name.clone(),
+                                },
+                                &self_id,
+                            );
                         } else {
                             // this should probably throw or something
                         }
@@ -162,11 +168,13 @@ impl Handler<ClientDisconnect> for Room {
     fn handle(&mut self, msg: ClientDisconnect, _: &mut Context<Self>) -> Self::Result {
         // try selecting the client from all user users
         if let Some(_) = self.users.remove(&msg.id) {
-            // TODO: this should not be necessary later – should be fine to just send this to the currently matched partner
-            // send to everyone in the room that new uuid just left
-            self.users.keys().for_each(|conn_id| {
-                self.send_event(Event::UserLeft { id: msg.id }, conn_id);
-            });
+            for (a, b) in self.active_matches.iter() {
+                if a == &msg.id {
+                    self.send_event(Event::UserLeft { id: msg.id }, b);
+                } else if b == &msg.id {
+                    self.send_event(Event::UserLeft { id: msg.id }, a);
+                }
+            }
 
             // send to all admins in the room that the user left
             self.admins.keys().for_each(|conn_id| {
