@@ -6,7 +6,7 @@ use std::string::String;
 use uuid::Uuid;
 
 use crate::messages::{
-    AdminConnect, AdminDisconnect, UserConnect, UserDisconnect, UserMessage, WebSocketMessage,
+    ClientConnect, ClientDisconnect, ClientKind, ClientMessage, WebSocketMessage,
 };
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -90,100 +90,93 @@ impl Actor for Room {
     type Context = Context<Self>;
 }
 
-impl Handler<UserConnect> for Room {
+impl Handler<ClientConnect> for Room {
     type Result = ();
 
-    fn handle(&mut self, msg: UserConnect, _: &mut Context<Self>) -> Self::Result {
-        // store the new user
-        self.sessions.insert(
-            msg.id,
-            ConnectionInfo {
-                name: msg.name.clone(),
-                socket_recipient: msg.addr,
-            },
-        );
+    fn handle(&mut self, msg: ClientConnect, _: &mut Context<Self>) -> Self::Result {
+        match msg.kind {
+            ClientKind::Admin => {
+                // store the new admin
+                self.admins.insert(
+                    msg.id,
+                    AdminConnectionInfo {
+                        socket_recipient: msg.addr,
+                    },
+                );
 
-        self.send_event(Event::SelfJoined { id: msg.id }, &msg.id);
-
-        match self.make_match(msg.id) {
-            Some((self_id, other_user_id)) => {
-                // send the new user the Id of the other user to connect to
-                self.send_event(Event::UserMatched { id: other_user_id }, &self_id);
+                // send to the admin all already present users
+                for (id, info) in self.sessions.iter() {
+                    self.send_event(
+                        Event::UserPresent {
+                            id: *id,
+                            name: info.name.clone(),
+                        },
+                        &msg.id,
+                    );
+                }
             }
-            None => (),
-        }
+            ClientKind::User(name) => {
+                // store the new user
+                self.sessions.insert(
+                    msg.id,
+                    ConnectionInfo {
+                        name: name.clone(),
+                        socket_recipient: msg.addr,
+                    },
+                );
 
-        // send to all admins in the room that the user joined
-        self.admins.keys().for_each(|conn_id| {
-            self.send_event(
-                Event::UserJoined {
-                    id: msg.id,
-                    name: msg.name.clone(),
-                },
-                conn_id,
-            );
-        });
-    }
-}
+                self.send_event(Event::SelfJoined { id: msg.id }, &msg.id);
 
-impl Handler<AdminConnect> for Room {
-    type Result = ();
+                match self.make_match(msg.id) {
+                    Some((self_id, other_user_id)) => {
+                        // send the new user the Id of the other user to connect to
+                        self.send_event(Event::UserMatched { id: other_user_id }, &self_id);
+                    }
+                    None => (),
+                }
 
-    fn handle(&mut self, msg: AdminConnect, _: &mut Context<Self>) -> Self::Result {
-        // store the new admin
-        self.admins.insert(
-            msg.id,
-            AdminConnectionInfo {
-                socket_recipient: msg.addr,
-            },
-        );
-
-        // send to the admin all already present users
-        for (id, info) in self.sessions.iter() {
-            self.send_event(
-                Event::UserPresent {
-                    id: *id,
-                    name: info.name.clone(),
-                },
-                &msg.id,
-            );
+                // send to all admins in the room that the user joined
+                self.admins.keys().for_each(|conn_id| {
+                    self.send_event(
+                        Event::UserJoined {
+                            id: msg.id,
+                            name: name.clone(),
+                        },
+                        conn_id,
+                    );
+                });
+            }
         }
     }
 }
 
-impl Handler<UserDisconnect> for Room {
+impl Handler<ClientDisconnect> for Room {
     type Result = ();
 
-    fn handle(&mut self, msg: UserDisconnect, _: &mut Context<Self>) -> Self::Result {
-        // remove the disconnected user
-        self.sessions.remove(&msg.id);
+    fn handle(&mut self, msg: ClientDisconnect, _: &mut Context<Self>) -> Self::Result {
+        // try selecting the client from all user sessions
+        if let Some(_) = self.sessions.remove(&msg.id) {
+            // TODO: this should not be necessary later – should be fine to just send this to the currently matched partner
+            // send to everyone in the room that new uuid just left
+            self.sessions.keys().for_each(|conn_id| {
+                self.send_event(Event::UserLeft { id: msg.id }, conn_id);
+            });
 
-        // TODO: this should not be necessary later – should be fine to just send this to the currently matched partner
-        // send to everyone in the room that new uuid just left
-        self.sessions.keys().for_each(|conn_id| {
-            self.send_event(Event::UserLeft { id: msg.id }, conn_id);
-        });
-
-        // send to all admins in the room that the user left
-        self.admins.keys().for_each(|conn_id| {
-            self.send_event(Event::UserLeft { id: msg.id }, conn_id);
-        });
+            // send to all admins in the room that the user left
+            self.admins.keys().for_each(|conn_id| {
+                self.send_event(Event::UserLeft { id: msg.id }, conn_id);
+            });
+        } else {
+            // if the client wasn't among user sessions, it must have been an admin
+            self.admins.remove(&msg.id);
+        }
     }
 }
 
-impl Handler<AdminDisconnect> for Room {
+impl Handler<ClientMessage> for Room {
     type Result = ();
 
-    fn handle(&mut self, msg: AdminDisconnect, _: &mut Context<Self>) -> Self::Result {
-        // remove the disconnected admin
-        self.admins.remove(&msg.id);
-    }
-}
-
-impl Handler<UserMessage> for Room {
-    type Result = ();
-
-    fn handle(&mut self, msg: UserMessage, _: &mut Context<Self>) -> Self::Result {
+    fn handle(&mut self, msg: ClientMessage, _: &mut Context<Self>) -> Self::Result {
         let event: Result<Event, serde_json::Error> = serde_json::from_str(&msg.payload);
 
         match event {

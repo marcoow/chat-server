@@ -4,7 +4,7 @@ use actix_web_actors::ws;
 use serde::{Deserialize, Serialize};
 use uuid::{uuid, Uuid};
 
-use crate::connections::{Admin as AdminConnection, User as UserConnection};
+use crate::connections::Connection;
 use crate::room::Room;
 use crate::AppState;
 
@@ -62,7 +62,7 @@ pub async fn start_admin_connection(
             new_room
         }
     };
-    let ws = AdminConnection::new(room_addr);
+    let ws = Connection::admin(room_addr);
 
     let resp = ws::start(ws, &req, stream)?;
     Ok(resp)
@@ -88,7 +88,7 @@ pub async fn start_connection(
             new_room
         }
     };
-    let ws = UserConnection::new(name, room_addr);
+    let ws = Connection::user(name, room_addr);
 
     let resp = ws::start(ws, &req, stream)?;
     Ok(resp)
