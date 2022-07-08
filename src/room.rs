@@ -28,6 +28,8 @@ enum Event {
     RTCConnectionOffer { id: Uuid, description: String },
     #[serde(rename = "rtc-connection-answer")]
     RTCConnectionAnswer { id: Uuid, description: String },
+    #[serde(rename = "active-matches-changed")]
+    ActiveMatchesChanged { matches: Vec<(Uuid, Uuid)> },
 }
 
 struct UserConnectionInfo {
@@ -116,6 +118,16 @@ impl Handler<ClientConnect> for Room {
                         &msg.id,
                     );
                 }
+
+                // send to all admins in the room the currently active matches
+                self.admins.keys().for_each(|conn_id| {
+                    self.send_event(
+                        Event::ActiveMatchesChanged {
+                            matches: self.active_matches.clone(),
+                        },
+                        conn_id,
+                    );
+                });
             }
             ClientKind::User(name) => {
                 // store the new user
@@ -129,6 +141,17 @@ impl Handler<ClientConnect> for Room {
 
                 self.send_event(Event::SelfJoined { id: msg.id }, &msg.id);
 
+                // send to all admins in the room that the user joined
+                self.admins.keys().for_each(|conn_id| {
+                    self.send_event(
+                        Event::UserJoined {
+                            id: msg.id,
+                            name: name.clone(),
+                        },
+                        conn_id,
+                    );
+                });
+
                 match self.make_match(msg.id) {
                     Some((self_id, other_user_id)) => {
                         if let Some(other_user) = self.users.get(&other_user_id) {
@@ -140,23 +163,22 @@ impl Handler<ClientConnect> for Room {
                                 },
                                 &self_id,
                             );
+
+                            // send to all admins in the room the currently active matches
+                            self.admins.keys().for_each(|conn_id| {
+                                self.send_event(
+                                    Event::ActiveMatchesChanged {
+                                        matches: self.active_matches.clone(),
+                                    },
+                                    conn_id,
+                                );
+                            });
                         } else {
                             // this should probably throw or something
                         }
                     }
                     None => (),
                 }
-
-                // send to all admins in the room that the user joined
-                self.admins.keys().for_each(|conn_id| {
-                    self.send_event(
-                        Event::UserJoined {
-                            id: msg.id,
-                            name: name.clone(),
-                        },
-                        conn_id,
-                    );
-                });
             }
         }
     }
