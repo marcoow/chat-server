@@ -139,6 +139,7 @@ impl Handler<ClientConnect> for Room {
                     },
                 );
 
+                // send the user their own ID
                 self.send_event(Event::SelfJoined { id: msg.id }, &msg.id);
 
                 // send to all admins in the room that the user joined
@@ -256,7 +257,7 @@ impl Room {
         let other_users = self
             .users
             .keys()
-            .filter(|conn_id| *conn_id.to_owned() != new_user_id);
+            .filter(|conn_id| *conn_id != &new_user_id);
 
         let next_match = new_user
             .iter()
