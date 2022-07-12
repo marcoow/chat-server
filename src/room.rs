@@ -1,6 +1,7 @@
 use actix::prelude::{Actor, Context, Handler, Recipient};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fmt;
 use std::iter::repeat_with;
 use std::string::String;
 use uuid::Uuid;
@@ -9,7 +10,7 @@ use crate::messages::{
     ClientConnect, ClientDisconnect, ClientKind, ClientMessage, WebSocketMessage,
 };
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(tag = "type", content = "data")]
 enum Event {
     #[serde(rename = "self-joined")]
@@ -30,6 +31,40 @@ enum Event {
     RTCConnectionAnswer { id: Uuid, description: String },
     #[serde(rename = "active-matches-changed")]
     ActiveMatchesChanged { matches: Vec<(Uuid, Uuid)> },
+}
+
+impl fmt::Debug for Event {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match &*self {
+            Event::SelfJoined { id } => write!(f, "SelfJoined ( id: {:?} )", id),
+            Event::UserJoined { id, name } => {
+                write!(f, "UserJoined ( id: {:?}, name: {:?} )", id, name)
+            }
+            Event::UserPresent { id, name } => {
+                write!(f, "UserPresent ( id: {:?}, name: {:?} )", id, name)
+            }
+            Event::UserMatched { id, name } => {
+                write!(f, "UserMatched ( id: {:?}, name: {:?} )", id, name)
+            }
+            Event::UserLeft { id } => write!(f, "UserLeft ( id: {:?} )", id),
+            Event::ICECandidate { id, .. } => {
+                write!(f, r#"ICECandidate ( id: {:?}, description: "..." )"#, id)
+            }
+            Event::RTCConnectionOffer { id, .. } => write!(
+                f,
+                r#"RTCConnectionOffer ( id: {:?}, description: "..." )"#,
+                id
+            ),
+            Event::RTCConnectionAnswer { id, .. } => write!(
+                f,
+                r#"RTCConnectionAnswer ( id: {:?}, description: "..." )"#,
+                id
+            ),
+            Event::ActiveMatchesChanged { matches } => {
+                write!(f, "ActiveMatchesChanged ( matches: {:?} )", matches)
+            }
+        }
+    }
 }
 
 struct UserConnectionInfo {
@@ -78,7 +113,7 @@ impl Room {
             do_send(&connection_info.socket_recipient);
         } else {
             println!(
-                "attempting to send message but couldn't find user id {:?}.",
+                "❌ Attempted to send message but couldn't find user id {:?}!",
                 recipient_id
             );
         }
@@ -253,8 +288,8 @@ impl Handler<ClientMessage> for Room {
                 },
                 &id,
             ),
-            Ok(event) => println!("unexpected event: {:?}", event),
-            Err(_error) => println!("unknown message: {:?}", msg.payload),
+            Ok(event) => println!("⚠️ Unexpected event: {:?}", event),
+            Err(_error) => println!("⚠️ Unknown message: {:?}", msg.payload),
         }
     }
 }
