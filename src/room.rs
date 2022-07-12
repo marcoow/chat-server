@@ -125,6 +125,26 @@ impl Room {
         let json = serde_json::to_string_pretty(&event).unwrap();
         self.send_message(&json, recipient_id);
     }
+
+    fn log_current_stats(&self) {
+        println!(
+            "
+ℹ️ Current server stats:\n
+        name: {:?}
+        admins: {:?} ({:?})
+        users: {:?} ({:?})
+        active matches: {:?}
+        previous matches: {:?}
+        ",
+            self.name,
+            self.admins.keys().len(),
+            self.admins.keys(),
+            self.users.keys().len(),
+            self.users.keys(),
+            self.active_matches,
+            self.previous_matches
+        );
+    }
 }
 
 impl Actor for Room {
@@ -219,6 +239,8 @@ impl Handler<ClientConnect> for Room {
                 }
             }
         }
+
+        self.log_current_stats();
     }
 }
 
@@ -257,6 +279,8 @@ impl Handler<ClientDisconnect> for Room {
             // remove the admin without notifying anyone
             self.admins.remove(&msg.id);
         }
+
+        self.log_current_stats();
     }
 }
 
@@ -291,31 +315,28 @@ impl Handler<ClientMessage> for Room {
             Ok(event) => println!("⚠️ Unexpected event: {:?}", event),
             Err(_error) => println!("⚠️ Unknown message: {:?}", msg.payload),
         }
+
+        self.log_current_stats();
     }
 }
 
 impl Room {
     fn make_match(&mut self, new_user_id: Uuid) -> Option<(Uuid, Uuid)> {
-        let filter_matches = |matches: &Vec<(Uuid, Uuid)>, (a, b): &(Uuid, Uuid)| -> bool {
-            !matches
-                .iter()
-                .any(|(pa, pb)| (pa == a && pb == b) || (pa == b && pb == a))
-        };
-
-        let new_user = [new_user_id];
-        let other_users = self.users.keys().filter(|conn_id| *conn_id != &new_user_id);
-
-        let next_match = new_user
-            .iter()
-            .zip(other_users.clone())
-            .map(|(a, b)| (*a, *b))
-            .filter(|pair| filter_matches(&self.previous_matches, pair))
-            .filter(|pair| filter_matches(&self.active_matches, pair))
+        let next_match_user_id = self
+            .users
+            .keys()
+            // only consider users that are not the user to match
+            .filter(|user_id| *user_id != &new_user_id)
+            // filter users the user to match has matched with before
+            .filter(|user_id| !&self.previous_matches.iter().any(|(a, b)| (&a == user_id && b == &new_user_id) || (a == &new_user_id && &b == user_id)))
+            // filter users the are currently in active matches
+            .filter(|user_id| !&self.active_matches.iter().any(|(a, b)| &a == user_id || &b == user_id))
             .next();
 
-        match next_match {
+        match next_match_user_id {
             None => return None,
-            Some(next_match) => {
+            Some(next_match_user_id) => {
+                let next_match = (new_user_id, *next_match_user_id);
                 self.active_matches.push(next_match);
                 self.previous_matches.push(next_match);
                 Some(next_match)
