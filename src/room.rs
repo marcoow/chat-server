@@ -85,6 +85,8 @@ impl Room {
     }
 
     fn send_event(&self, event: Event, recipient_id: &Uuid) {
+        println!("✉️ Sending {:?} to {:?}.", event, recipient_id);
+
         let json = serde_json::to_string_pretty(&event).unwrap();
         self.send_message(&json, recipient_id);
     }
@@ -191,13 +193,25 @@ impl Handler<ClientDisconnect> for Room {
     fn handle(&mut self, msg: ClientDisconnect, _: &mut Context<Self>) -> Self::Result {
         // try selecting the client from all user users
         if let Some(_) = self.users.remove(&msg.id) {
-            for (a, b) in self.active_matches.iter() {
+            for (a, b) in &self.active_matches {
+                // send the other users in the user's active matches that their partner left
                 if a == &msg.id {
                     self.send_event(Event::UserLeft { id: msg.id }, b);
                 } else if b == &msg.id {
                     self.send_event(Event::UserLeft { id: msg.id }, a);
                 }
             }
+            self.active_matches
+                .retain(|(a, b)| a != &msg.id && b != &msg.id);
+            // send to all admins in the room the currently active matches
+            self.admins.keys().for_each(|conn_id| {
+                self.send_event(
+                    Event::ActiveMatchesChanged {
+                        matches: self.active_matches.clone(),
+                    },
+                    conn_id,
+                );
+            });
 
             // send to all admins in the room that the user left
             self.admins.keys().for_each(|conn_id| {
@@ -254,10 +268,7 @@ impl Room {
         };
 
         let new_user = [new_user_id];
-        let other_users = self
-            .users
-            .keys()
-            .filter(|conn_id| *conn_id != &new_user_id);
+        let other_users = self.users.keys().filter(|conn_id| *conn_id != &new_user_id);
 
         let next_match = new_user
             .iter()
