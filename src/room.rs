@@ -344,3 +344,39 @@ impl Room {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use uuid::uuid;
+    use actix_derive::Message;
+    use actix::Recipient;
+    use super::Room;
+    use super::UserConnectionInfo;
+
+    #[derive(Message)]
+    #[rtype(result = "()")]
+    pub struct WebSocketMessage(pub String);
+
+    #[derive(Message)]
+    #[rtype(result = "()")]
+    pub struct TestMessage {
+        pub addr: Recipient<WebSocketMessage>,
+    };
+
+    #[test]
+    fn it_makes_matches_correctly() {
+        let room = Room::new(String::from("test"));
+        let msg = TestMessage { addr:  };
+
+        let user1 = UserConnectionInfo {
+            name: String::from("user 1"),
+            socket_recipient: msg.addr,
+        };
+        room.users.insert(uuid!("27a64ebc-06c9-4f14-bf8b-fafce92d6396"), user1);
+        let user2 = UserConnectionInfo {
+            name: String::from("user 2"),
+            socket_recipient: msg.addr,
+        };
+        room.users.insert(uuid!("27a64ebc-06c9-4f14-bf8b-fafce92d6393"), user2);
+    }
+}
