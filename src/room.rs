@@ -322,21 +322,11 @@ impl Handler<ClientMessage> for Room {
 
 impl Room {
     fn make_match(&mut self, new_user_id: Uuid) -> Option<(Uuid, Uuid)> {
-        let next_match_user_id = self
-            .users
-            .keys()
-            // only consider users that are not the user to match
-            .filter(|user_id| *user_id != &new_user_id)
-            // filter users the user to match has matched with before
-            .filter(|user_id| !&self.previous_matches.iter().any(|(a, b)| (&a == user_id && b == &new_user_id) || (a == &new_user_id && &b == user_id)))
-            // filter users the are currently in active matches
-            .filter(|user_id| !&self.active_matches.iter().any(|(a, b)| &a == user_id || &b == user_id))
-            .next();
+        let next_match = calculate_next_match::<UserConnectionInfo>(&new_user_id, &self.users, &self.previous_matches);
 
-        match next_match_user_id {
+        match next_match {
             None => return None,
-            Some(next_match_user_id) => {
-                let next_match = (new_user_id, *next_match_user_id);
+            Some(next_match) => {
                 self.active_matches.push(next_match);
                 self.previous_matches.push(next_match);
                 Some(next_match)
@@ -345,38 +335,42 @@ impl Room {
     }
 }
 
+fn calculate_next_match<T>(id: &Uuid, ids_list: &HashMap<Uuid, T>, exclude_list: &Vec<(Uuid, Uuid)>) -> Option<(Uuid, Uuid)> {
+    let next_match_id = ids_list
+        .keys()
+        // only consider ids that are not the id to match
+        .filter(|_id| *_id != id)
+        // filter ids that are in the exlude_list
+        .filter(|_id| !&exclude_list.iter().any(|(a, b)| (&a == _id && &b == &id) || (&a == &id && &b == _id)))
+        .next();
+
+    match next_match_id {
+        None => return None,
+        Some(next_match_id) => {
+            Some((*id, *next_match_id))
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use uuid::uuid;
-    use actix_derive::Message;
-    use actix::Recipient;
-    use super::Room;
-    use super::UserConnectionInfo;
-
-    #[derive(Message)]
-    #[rtype(result = "()")]
-    pub struct WebSocketMessage(pub String);
-
-    #[derive(Message)]
-    #[rtype(result = "()")]
-    pub struct TestMessage {
-        pub addr: Recipient<WebSocketMessage>,
-    };
+    use std::collections::HashMap;
+    use uuid::{uuid, Uuid};
+    use super::calculate_next_match;
 
     #[test]
     fn it_makes_matches_correctly() {
-        let room = Room::new(String::from("test"));
-        let msg = TestMessage { addr:  };
+        let mut users = HashMap::<Uuid, ()>::new();
+        let exclude_list = Vec::<(Uuid, Uuid)>::new();
 
-        let user1 = UserConnectionInfo {
-            name: String::from("user 1"),
-            socket_recipient: msg.addr,
-        };
-        room.users.insert(uuid!("27a64ebc-06c9-4f14-bf8b-fafce92d6396"), user1);
-        let user2 = UserConnectionInfo {
-            name: String::from("user 2"),
-            socket_recipient: msg.addr,
-        };
-        room.users.insert(uuid!("27a64ebc-06c9-4f14-bf8b-fafce92d6393"), user2);
+        let user1_id = uuid!("11111111-06c9-4f14-bf8b-fafce92d6396");
+        let user2_id = uuid!("22222222-06c9-4f14-bf8b-fafce92d6396");
+        let user3_id = uuid!("33333333-06c9-4f14-bf8b-fafce92d6396");
+        users.insert(user1_id, ());
+        users.insert(user2_id, ());
+
+        let next_match = calculate_next_match(&user3_id, &users, &exclude_list);
+
+        assert_eq!(next_match, Some((user3_id, user2_id)));
     }
 }
