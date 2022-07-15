@@ -322,7 +322,11 @@ impl Handler<ClientMessage> for Room {
 
 impl Room {
     fn make_match(&mut self, new_user_id: Uuid) -> Option<(Uuid, Uuid)> {
-        let next_match = calculate_next_match::<UserConnectionInfo>(&new_user_id, &self.users, &self.previous_matches);
+        let next_match = calculate_next_match::<UserConnectionInfo>(
+            &new_user_id,
+            &self.users,
+            &self.previous_matches,
+        );
 
         match next_match {
             None => return None,
@@ -335,42 +339,88 @@ impl Room {
     }
 }
 
-fn calculate_next_match<T>(id: &Uuid, ids_list: &HashMap<Uuid, T>, exclude_list: &Vec<(Uuid, Uuid)>) -> Option<(Uuid, Uuid)> {
+fn calculate_next_match<T>(
+    id: &Uuid,
+    ids_list: &HashMap<Uuid, T>,
+    exclude_list: &Vec<(Uuid, Uuid)>,
+) -> Option<(Uuid, Uuid)> {
     let next_match_id = ids_list
         .keys()
         // only consider ids that are not the id to match
         .filter(|_id| *_id != id)
         // filter ids that are in the exlude_list
-        .filter(|_id| !&exclude_list.iter().any(|(a, b)| (&a == _id && &b == &id) || (&a == &id && &b == _id)))
+        .filter(|_id| {
+            !&exclude_list
+                .iter()
+                .any(|(a, b)| (&a == _id && &b == &id) || (&a == &id && &b == _id))
+        })
         .next();
 
     match next_match_id {
         None => return None,
-        Some(next_match_id) => {
-            Some((*id, *next_match_id))
-        }
+        Some(next_match_id) => Some((*id, *next_match_id)),
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use super::calculate_next_match;
     use std::collections::HashMap;
     use uuid::{uuid, Uuid};
-    use super::calculate_next_match;
 
     #[test]
     fn it_makes_matches_correctly() {
         let mut users = HashMap::<Uuid, ()>::new();
         let exclude_list = Vec::<(Uuid, Uuid)>::new();
 
-        let user1_id = uuid!("11111111-06c9-4f14-bf8b-fafce92d6396");
-        let user2_id = uuid!("22222222-06c9-4f14-bf8b-fafce92d6396");
-        let user3_id = uuid!("33333333-06c9-4f14-bf8b-fafce92d6396");
-        users.insert(user1_id, ());
-        users.insert(user2_id, ());
+        const USER1_ID: Uuid = uuid!("11111111-06c9-4f14-bf8b-fafce92d6396");
+        const USER2_ID: Uuid = uuid!("22222222-06c9-4f14-bf8b-fafce92d6396");
+        const USER3_ID: Uuid = uuid!("33333333-06c9-4f14-bf8b-fafce92d6396");
+        users.insert(USER1_ID, ());
+        users.insert(USER2_ID, ());
 
-        let next_match = calculate_next_match(&user3_id, &users, &exclude_list);
+        // Sorting isn't stable so it either matches user 3 with user 2 first and then user 1 or with user 1 first and then user 2. After those 2 matches it must return None as there are no options left.
+        // Running this 100 times to make sure both cases are covered
+        let mut i = 1;
+        while i <= 100 {
+            match calculate_next_match(&USER3_ID, &users, &exclude_list) {
+                Some((USER3_ID, USER2_ID)) => {
+                    let next_match =
+                        calculate_next_match(&USER3_ID, &users, &vec![(USER3_ID, USER2_ID)]);
 
-        assert_eq!(next_match, Some((user3_id, user2_id)));
+                    assert_eq!(next_match, Some((USER3_ID, USER1_ID)));
+
+                    let next_match = calculate_next_match(
+                        &USER3_ID,
+                        &users,
+                        &vec![(USER3_ID, USER2_ID), (USER3_ID, USER1_ID)],
+                    );
+
+                    assert_eq!(next_match, None);
+                }
+                Some((USER3_ID, USER1_ID)) => {
+                    let next_next_match =
+                        calculate_next_match(&USER3_ID, &users, &vec![(USER3_ID, USER1_ID)]);
+
+                    assert_eq!(next_next_match, Some((USER3_ID, USER2_ID)));
+
+                    let next_match = calculate_next_match(
+                        &USER3_ID,
+                        &users,
+                        &vec![(USER3_ID, USER1_ID), (USER3_ID, USER2_ID)],
+                    );
+
+                    assert_eq!(next_match, None);
+                }
+                Some((_, _)) => {
+                    panic!();
+                }
+                None => {
+                    panic!();
+                }
+            }
+
+            i += 1;
+        }
     }
 }
