@@ -321,6 +321,7 @@ impl Handler<ClientMessage> for Room {
 
                             ctx.run_later(MATCH_DURATION, move |a, _ctx| {
                                 a.send_event(Event::MatchEnded { id: other_user_id }, &self_id);
+                                a.send_event(Event::MatchEnded { id: self_id }, &other_user_id);
                             });
 
                             // send to all admins in the room the currently active matches
