@@ -4,11 +4,14 @@ use std::collections::HashMap;
 use std::fmt;
 use std::iter::repeat_with;
 use std::string::String;
+use std::time::Duration;
 use uuid::Uuid;
 
 use crate::messages::{
     ClientConnect, ClientDisconnect, ClientKind, ClientMessage, WebSocketMessage,
 };
+
+const MATCH_DURATION: Duration = Duration::from_secs(120);
 
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type", content = "data")]
@@ -20,7 +23,11 @@ enum Event {
     #[serde(rename = "user-present")]
     UserPresent { id: Uuid, name: String },
     #[serde(rename = "user-matched")]
-    UserMatched { id: Uuid, name: String },
+    UserMatched {
+        id: Uuid,
+        name: String,
+        duration: u64,
+    },
     #[serde(rename = "user-left")]
     UserLeft { id: Uuid },
     #[serde(rename = "ice-candidate")]
@@ -43,8 +50,12 @@ impl fmt::Debug for Event {
             Event::UserPresent { id, name } => {
                 write!(f, "UserPresent ( id: {:?}, name: {:?} )", id, name)
             }
-            Event::UserMatched { id, name } => {
-                write!(f, "UserMatched ( id: {:?}, name: {:?} )", id, name)
+            Event::UserMatched { id, name, duration } => {
+                write!(
+                    f,
+                    "UserMatched ( id: {:?}, name: {:?}, duration: {:?} )",
+                    id, name, duration
+                )
             }
             Event::UserLeft { id } => write!(f, "UserLeft ( id: {:?} )", id),
             Event::ICECandidate { id, .. } => {
@@ -218,6 +229,7 @@ impl Handler<ClientConnect> for Room {
                                 Event::UserMatched {
                                     id: other_user_id,
                                     name: other_user.name.clone(),
+                                    duration: MATCH_DURATION.as_secs(),
                                 },
                                 &self_id,
                             );
