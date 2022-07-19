@@ -1,4 +1,4 @@
-use actix::prelude::{Actor, Context, Handler, Recipient};
+use actix::prelude::{Actor, AsyncContext, Context, Handler, Recipient};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt;
@@ -28,6 +28,8 @@ enum Event {
         name: String,
         duration: u64,
     },
+    #[serde(rename = "match-ended")]
+    MatchEnded { id: Uuid },
     #[serde(rename = "user-left")]
     UserLeft { id: Uuid },
     #[serde(rename = "ice-candidate")]
@@ -56,6 +58,9 @@ impl fmt::Debug for Event {
                     "UserMatched ( id: {:?}, name: {:?}, duration: {:?} )",
                     id, name, duration
                 )
+            }
+            Event::MatchEnded { id } => {
+                write!(f, "MatchEnded ( id: {:?} )", id)
             }
             Event::UserLeft { id } => write!(f, "UserLeft ( id: {:?} )", id),
             Event::ICECandidate { id, .. } => {
@@ -165,7 +170,7 @@ impl Actor for Room {
 impl Handler<ClientConnect> for Room {
     type Result = ();
 
-    fn handle(&mut self, msg: ClientConnect, _: &mut Context<Self>) -> Self::Result {
+    fn handle(&mut self, msg: ClientConnect, ctx: &mut Context<Self>) -> Self::Result {
         match msg.kind {
             ClientKind::Admin => {
                 // store the new admin
@@ -233,6 +238,10 @@ impl Handler<ClientConnect> for Room {
                                 },
                                 &self_id,
                             );
+
+                            ctx.run_later(MATCH_DURATION, move |a, _ctx| {
+                                a.send_event(Event::MatchEnded { id: other_user_id }, &self_id);
+                            });
 
                             // send to all admins in the room the currently active matches
                             self.admins.keys().for_each(|conn_id| {
