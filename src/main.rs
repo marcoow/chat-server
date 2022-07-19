@@ -9,6 +9,7 @@ mod connections;
 mod handlers;
 mod messages;
 mod room;
+mod util;
 
 use room::Room;
 

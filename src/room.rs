@@ -10,8 +10,10 @@ use uuid::Uuid;
 use crate::messages::{
     ClientConnect, ClientDisconnect, ClientKind, ClientMessage, WebSocketMessage,
 };
+use crate::util::is_dev_mode;
 
 const MATCH_DURATION: Duration = Duration::from_secs(120);
+const MATCH_DURATION_DEV_MODE: Duration = Duration::from_secs(15);
 
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type", content = "data")]
@@ -309,17 +311,22 @@ impl Handler<ClientMessage> for Room {
                 match self.make_match(id) {
                     Some((self_id, other_user_id)) => {
                         if let Some(other_user) = self.users.get(&other_user_id) {
+                            let duration = if is_dev_mode() {
+                                MATCH_DURATION_DEV_MODE
+                            } else {
+                                MATCH_DURATION
+                            };
                             // send the new user the Id of the other user to connect to
                             self.send_event(
                                 Event::UserMatched {
                                     id: other_user_id,
                                     name: other_user.name.clone(),
-                                    duration: MATCH_DURATION.as_secs(),
+                                    duration: duration.as_secs(),
                                 },
                                 &self_id,
                             );
 
-                            ctx.run_later(MATCH_DURATION, move |a, _ctx| {
+                            ctx.run_later(duration, move |a, _ctx| {
                                 a.send_event(Event::MatchEnded { id: other_user_id }, &self_id);
                                 a.send_event(Event::MatchEnded { id: self_id }, &other_user_id);
 

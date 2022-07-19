@@ -8,6 +8,14 @@ Run it via:
 cargo run
 ```
 
+or
+
+```bash
+cargo run -- --dev
+```
+
+to run the server in development mode which will for example change each match's duration to only 15s.
+
 Use [`cloudflared`](https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/run-tunnel/trycloudflare/) to make your local server available via SSL for everyone. First, get the Tunnel credentials from 1Password and save them into `./cloudflared/credentials.json`. Then run:
 
 ```bash
