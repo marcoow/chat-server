@@ -360,6 +360,7 @@ impl Room {
         let next_match = calculate_next_match::<UserConnectionInfo>(
             &new_user_id,
             &self.users,
+            &self.active_matches,
             &self.previous_matches,
         );
 
@@ -377,15 +378,30 @@ impl Room {
 fn calculate_next_match<T>(
     id: &Uuid,
     ids_list: &HashMap<Uuid, T>,
-    exclude_list: &Vec<(Uuid, Uuid)>,
+    participating_exclude_list: &Vec<(Uuid, Uuid)>,
+    match_exclude_list: &Vec<(Uuid, Uuid)>,
 ) -> Option<(Uuid, Uuid)> {
+    // return None if the id to match is currently participating in a match
+    if let Some(_) = participating_exclude_list
+        .iter()
+        .find(|(a, b)| &a == &id || &b == &id)
+    {
+        return None;
+    }
+
     let next_match_id = ids_list
         .keys()
         // only consider ids that are not the id to match
         .filter(|_id| *_id != id)
-        // filter ids that are in the exlude_list
+        // filter ids that are in an active match
         .filter(|_id| {
-            !&exclude_list
+            !&participating_exclude_list
+                .iter()
+                .any(|(a, b)| &a == _id || &b == _id)
+        })
+        // filter matches that had been made before
+        .filter(|_id| {
+            !&match_exclude_list
                 .iter()
                 .any(|(a, b)| (&a == _id && &b == &id) || (&a == &id && &b == _id))
         })
@@ -403,47 +419,101 @@ mod tests {
     use std::collections::HashMap;
     use uuid::{uuid, Uuid};
 
+    const USER1_ID: Uuid = uuid!("11111111-06c9-4f14-bf8b-fafce92d6396");
+    const USER2_ID: Uuid = uuid!("22222222-06c9-4f14-bf8b-fafce92d6396");
+    const USER3_ID: Uuid = uuid!("33333333-06c9-4f14-bf8b-fafce92d6396");
+    const USER4_ID: Uuid = uuid!("44444444-06c9-4f14-bf8b-fafce92d6396");
+
     #[test]
     fn it_makes_matches_correctly() {
         let mut users = HashMap::<Uuid, ()>::new();
-        let exclude_list = Vec::<(Uuid, Uuid)>::new();
+        let active_matches = Vec::<(Uuid, Uuid)>::new();
+        let previous_matches = Vec::<(Uuid, Uuid)>::new();
 
-        const USER1_ID: Uuid = uuid!("11111111-06c9-4f14-bf8b-fafce92d6396");
-        const USER2_ID: Uuid = uuid!("22222222-06c9-4f14-bf8b-fafce92d6396");
-        const USER3_ID: Uuid = uuid!("33333333-06c9-4f14-bf8b-fafce92d6396");
         users.insert(USER1_ID, ());
         users.insert(USER2_ID, ());
+
+        // if there are only 2 users with no active or previous, it matches those together
+        let next_match =
+            calculate_next_match(&USER1_ID, &users, &active_matches, &previous_matches);
+
+        assert_eq!(next_match, Some((USER1_ID, USER2_ID)));
+    }
+
+    #[test]
+    fn it_excludes_active_matches() {
+        let mut users = HashMap::<Uuid, ()>::new();
+        let mut active_matches = Vec::<(Uuid, Uuid)>::new();
+        let previous_matches = Vec::<(Uuid, Uuid)>::new();
+
+        users.insert(USER1_ID, ());
+        users.insert(USER2_ID, ());
+        users.insert(USER3_ID, ());
+
+        active_matches.push((USER1_ID, USER2_ID));
+
+        // if there are 3 users and 2 are in an active match, it cannot match the third user
+        let next_match =
+            calculate_next_match(&USER3_ID, &users, &active_matches, &previous_matches);
+
+        assert_eq!(next_match, None);
+
+        // if the user is in an active match, it cannot be matched again
+        let next_match =
+            calculate_next_match(&USER1_ID, &users, &active_matches, &previous_matches);
+
+        assert_eq!(next_match, None);
+
+        // if there are 4 users and 2 are in an active match, only one option remains
+        users.insert(USER4_ID, ());
+        let next_match =
+            calculate_next_match(&USER3_ID, &users, &active_matches, &previous_matches);
+
+        assert_eq!(next_match, Some((USER3_ID, USER4_ID)));
+    }
+
+    #[test]
+    fn it_does_not_repeat_matches() {
+        let mut users = HashMap::<Uuid, ()>::new();
+        let active_matches = Vec::<(Uuid, Uuid)>::new();
+        let mut previous_matches = Vec::<(Uuid, Uuid)>::new();
+
+        users.insert(USER1_ID, ());
+        users.insert(USER2_ID, ());
+        users.insert(USER3_ID, ());
 
         // Sorting isn't stable so it either matches user 3 with user 2 first and then user 1 or with user 1 first and then user 2. After those 2 matches it must return None as there are no options left.
         // Running this 100 times to make sure both cases are covered
         let mut i = 1;
         while i <= 100 {
-            match calculate_next_match(&USER3_ID, &users, &exclude_list) {
+            previous_matches.clear();
+
+            match calculate_next_match(&USER3_ID, &users, &active_matches, &previous_matches) {
                 Some((USER3_ID, USER2_ID)) => {
+                    previous_matches.push((USER3_ID, USER2_ID));
+
                     let next_match =
-                        calculate_next_match(&USER3_ID, &users, &vec![(USER3_ID, USER2_ID)]);
+                        calculate_next_match(&USER3_ID, &users, &active_matches, &previous_matches);
 
                     assert_eq!(next_match, Some((USER3_ID, USER1_ID)));
+                    previous_matches.push((USER3_ID, USER1_ID));
 
-                    let next_match = calculate_next_match(
-                        &USER3_ID,
-                        &users,
-                        &vec![(USER3_ID, USER2_ID), (USER3_ID, USER1_ID)],
-                    );
+                    let next_match =
+                        calculate_next_match(&USER3_ID, &users, &active_matches, &previous_matches);
 
                     assert_eq!(next_match, None);
                 }
                 Some((USER3_ID, USER1_ID)) => {
+                    previous_matches.push((USER3_ID, USER1_ID));
+
                     let next_next_match =
-                        calculate_next_match(&USER3_ID, &users, &vec![(USER3_ID, USER1_ID)]);
+                        calculate_next_match(&USER3_ID, &users, &active_matches, &previous_matches);
 
                     assert_eq!(next_next_match, Some((USER3_ID, USER2_ID)));
+                    previous_matches.push((USER3_ID, USER2_ID));
 
-                    let next_match = calculate_next_match(
-                        &USER3_ID,
-                        &users,
-                        &vec![(USER3_ID, USER1_ID), (USER3_ID, USER2_ID)],
-                    );
+                    let next_match =
+                        calculate_next_match(&USER3_ID, &users, &active_matches, &previous_matches);
 
                     assert_eq!(next_match, None);
                 }
