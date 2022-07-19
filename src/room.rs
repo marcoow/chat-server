@@ -22,6 +22,8 @@ enum Event {
     UserJoined { id: Uuid, name: String },
     #[serde(rename = "user-present")]
     UserPresent { id: Uuid, name: String },
+    #[serde(rename = "ready-to-match")]
+    ReadyToMatch { id: Uuid },
     #[serde(rename = "user-matched")]
     UserMatched {
         id: Uuid,
@@ -51,6 +53,9 @@ impl fmt::Debug for Event {
             }
             Event::UserPresent { id, name } => {
                 write!(f, "UserPresent ( id: {:?}, name: {:?} )", id, name)
+            }
+            Event::ReadyToMatch { id } => {
+                write!(f, "ReadyToMatch ( id: {:?} )", id)
             }
             Event::UserMatched { id, name, duration } => {
                 write!(
@@ -170,7 +175,7 @@ impl Actor for Room {
 impl Handler<ClientConnect> for Room {
     type Result = ();
 
-    fn handle(&mut self, msg: ClientConnect, ctx: &mut Context<Self>) -> Self::Result {
+    fn handle(&mut self, msg: ClientConnect, _: &mut Context<Self>) -> Self::Result {
         match msg.kind {
             ClientKind::Admin => {
                 // store the new admin
@@ -225,39 +230,6 @@ impl Handler<ClientConnect> for Room {
                         conn_id,
                     );
                 });
-
-                match self.make_match(msg.id) {
-                    Some((self_id, other_user_id)) => {
-                        if let Some(other_user) = self.users.get(&other_user_id) {
-                            // send the new user the Id of the other user to connect to
-                            self.send_event(
-                                Event::UserMatched {
-                                    id: other_user_id,
-                                    name: other_user.name.clone(),
-                                    duration: MATCH_DURATION.as_secs(),
-                                },
-                                &self_id,
-                            );
-
-                            ctx.run_later(MATCH_DURATION, move |a, _ctx| {
-                                a.send_event(Event::MatchEnded { id: other_user_id }, &self_id);
-                            });
-
-                            // send to all admins in the room the currently active matches
-                            self.admins.keys().for_each(|conn_id| {
-                                self.send_event(
-                                    Event::ActiveMatchesChanged {
-                                        matches: self.active_matches.clone(),
-                                    },
-                                    conn_id,
-                                );
-                            });
-                        } else {
-                            // this should probably throw or something
-                        }
-                    }
-                    None => (),
-                }
             }
         }
 
@@ -308,7 +280,7 @@ impl Handler<ClientDisconnect> for Room {
 impl Handler<ClientMessage> for Room {
     type Result = ();
 
-    fn handle(&mut self, msg: ClientMessage, _: &mut Context<Self>) -> Self::Result {
+    fn handle(&mut self, msg: ClientMessage, ctx: &mut Context<Self>) -> Self::Result {
         let event: Result<Event, serde_json::Error> = serde_json::from_str(&msg.payload);
 
         match event {
@@ -333,6 +305,40 @@ impl Handler<ClientMessage> for Room {
                 },
                 &id,
             ),
+            Ok(Event::ReadyToMatch { id }) => {
+                match self.make_match(id) {
+                    Some((self_id, other_user_id)) => {
+                        if let Some(other_user) = self.users.get(&other_user_id) {
+                            // send the new user the Id of the other user to connect to
+                            self.send_event(
+                                Event::UserMatched {
+                                    id: other_user_id,
+                                    name: other_user.name.clone(),
+                                    duration: MATCH_DURATION.as_secs(),
+                                },
+                                &self_id,
+                            );
+
+                            ctx.run_later(MATCH_DURATION, move |a, _ctx| {
+                                a.send_event(Event::MatchEnded { id: other_user_id }, &self_id);
+                            });
+
+                            // send to all admins in the room the currently active matches
+                            self.admins.keys().for_each(|conn_id| {
+                                self.send_event(
+                                    Event::ActiveMatchesChanged {
+                                        matches: self.active_matches.clone(),
+                                    },
+                                    conn_id,
+                                );
+                            });
+                        } else {
+                            // this should probably throw or something
+                        }
+                    }
+                    None => (),
+                }
+            }
             Ok(event) => println!("⚠️ Unexpected event: {:?}", event),
             Err(_error) => println!("⚠️ Unknown message: {:?}", msg.payload),
         }
