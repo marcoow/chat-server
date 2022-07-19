@@ -1,0 +1,5 @@
+tunnel: private-chat-roulette
+ingress:
+  - hostname: private-chat-roulette.mainmatter.dev
+    service: http://localhost:4000
+  - service: http_status:404
